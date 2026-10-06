@@ -19,6 +19,7 @@ dist-ssr
 *.local
 .env
 .env.*
+!.env.example
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -41,4 +42,4 @@ secrets/
 compose.env
 
 # Runtime data & logs — never commit
-backend/Data/.Logs/
+Infra/services/backend/Data/.Logs/
