@@ -112,6 +112,8 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
 - **Por que não o serviço do Windows?** O `cloudflared service install` no Windows foi testado e descartado. Com `--config` no `ImagePath`, o serviço encerra com `flag provided but not defined: -config`. Sem argumentos, lendo `systemprofile\.cloudflared\config.yml`, cai em loop sem logar o motivo. Rodar o conector como container junto do MD70 evita isso e não exige administrador.
 - **Reboot do Windows.** A máquina do Podman não sobe sozinha. Depois de reiniciar, é preciso rodar `podman machine start`. O `md70_cloudflared` tem `--restart unless-stopped`, mas a maioria dos serviços do compose não tem restart policy.
 
+- **Frontend self-hosted.** O `@lovable.dev/vite-tanstack-config` faz o build com o nitro no preset `cloudflare-module` (bundle de Worker), que não roda aqui. O `frontend/entrypoint.sh` de produção exporta `NITRO_PRESET=bun` e serve `.output/server/index.mjs`. Como o build roda no start do container, o frontend de prod não usa `read_only`.
+
 ## Segurança
 
 - Credenciais (`<TUNNEL_ID>.json`, `cert.pem`) e secrets (`secrets/`, `.env.*`) **nunca** vão para o git. O `.gitignore` já cobre `secrets/`, `*.secrets` e `.env.*`.

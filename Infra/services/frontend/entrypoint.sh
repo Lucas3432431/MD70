@@ -23,8 +23,11 @@ if [ "$HOT_RELOAD_ENABLED" = "true" ]; then
     echo "🚀 Starting Bun dev server..."
     bun run dev --host 0.0.0.0 --port "${FRONTEND_PORT}" --strictPort
 else
-    echo "🏗️  Building..."
+    # O preset padrão do @lovable.dev/vite-tanstack-config é cloudflare-module (bundle de Worker),
+    # que não roda self-hosted. NITRO_PRESET=bun gera .output/server/index.mjs executável pelo bun.
+    export NITRO_PRESET="${NITRO_PRESET:-bun}"
+    echo "🏗️  Building (nitro preset: ${NITRO_PRESET})..."
     bun run build
-    echo "✅ Build done — serving via bun preview"
-    bun run preview --host 0.0.0.0 --port "${FRONTEND_PORT}"
+    echo "✅ Build done — serving .output/server/index.mjs"
+    HOST=0.0.0.0 PORT="${FRONTEND_PORT}" exec bun .output/server/index.mjs
 fi
