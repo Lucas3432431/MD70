@@ -136,3 +136,12 @@ export function useDeleteMovement() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
   });
 }
+
+export function usePatchBudgetLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Record<string, unknown>) =>
+      api.patch(`/portal-admin/budget-lines/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
+  });
+}

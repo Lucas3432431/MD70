@@ -60,15 +60,15 @@ async def get_admin_data():
 
             # -- budgets --
             rows = conn.execute(text(
-                "SELECT id, development_id, category, item, planned, realized, committed, remaining, "
+                "SELECT id, development_id, category, item, planned, committed, remaining, "
                 "       quantity, unit, note "
                 "FROM md70_budget_lines ORDER BY development_id, id"
             )).fetchall()
             budgets = [
                 {
                     "id": r[0], "projectId": r[1], "category": r[2], "item": r[3],
-                    "planned": r[4], "realized": r[5], "committed": r[6], "remaining": r[7],
-                    "quantity": r[8], "unit": r[9], "note": r[10],
+                    "planned": r[4], "committed": r[5], "remaining": r[6],
+                    "quantity": r[7], "unit": r[8], "note": r[9],
                 }
                 for r in rows
             ]
@@ -222,7 +222,7 @@ async def patch_lead(lead_id: str, body: LeadPatch):
     """Update a lead's status and/or notes."""
     engine = database.engine
 
-    valid_statuses = {"Interesse", "Qualificado", "Em negociação", "Investidor ativo", "Descartado"}
+    valid_statuses = {"Interesse", "Qualificado", "Em negociação", "Investidor ativo", "Descartado", "Descartado/Adiado"}
     if body.status is not None and body.status not in valid_statuses:
         raise HTTPException(
             status_code=422,
@@ -827,6 +827,44 @@ async def patch_quote(quote_id: str, body: QuotePatch):
 # ---------------------------------------------------------------------------
 # DELETE /api/portal-admin/quotes/{quote_id}
 # ---------------------------------------------------------------------------
+
+class BudgetLinePatch(BaseModel):
+    planned: Optional[float] = None
+    remaining: Optional[float] = None
+    note: Optional[str] = None
+
+
+@router.patch("/budget-lines/{line_id}")
+async def patch_budget_line(line_id: str, body: BudgetLinePatch):
+    """Update planned and/or remaining on a budget line."""
+    engine = database.engine
+    set_parts: list[str] = []
+    params: dict = {"id": line_id}
+    if body.planned is not None:
+        set_parts.append("planned = :planned")
+        params["planned"] = body.planned
+    if body.remaining is not None:
+        set_parts.append("remaining = :remaining")
+        params["remaining"] = body.remaining
+    if body.note is not None:
+        set_parts.append("note = :note")
+        params["note"] = body.note
+    if not set_parts:
+        return {"ok": True, "id": line_id}
+    sql = f"UPDATE md70_budget_lines SET {', '.join(set_parts)} WHERE id = :id"
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(sql), params)
+            conn.commit()
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail=f"Linha '{line_id}' não encontrada.")
+        return {"ok": True, "id": line_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error(f"[AdminRoutes] PATCH /budget-lines/{line_id} error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno ao atualizar linha orçamentária.")
+
 
 @router.delete("/quotes/{quote_id}", status_code=200)
 async def delete_quote(quote_id: str):

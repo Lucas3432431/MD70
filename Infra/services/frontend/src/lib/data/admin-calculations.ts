@@ -6,7 +6,7 @@ export function projectSummary(data: AdminData, projectId: string) {
   const project = data.projects.find((p) => p.id === projectId);
   const lines = data.budgets.filter((line) => line.projectId === projectId);
   const movements = data.movements.filter((m) => m.projectId === projectId);
-  const spent = sum(movements.filter((m) => m.direction === "Saída" && m.status === "Realizado").map((m) => m.value));
+  const spent = sum(movements.filter((m) => m.direction === "Saída" && m.status === "Realizado" && m.category !== "Capital").map((m) => m.value));
   const committed = sum(data.purchases.filter((p) => p.projectId === projectId && (p.status === "Aguardando entrega" || p.status === "Entregue") && !p.paidAt).map((p) => {
     const chosen = p.quotes.find((q) => q.id === p.selectedQuoteId);
     return chosen ? quoteTotal(chosen) : 0;
@@ -14,8 +14,10 @@ export function projectSummary(data: AdminData, projectId: string) {
   const estimatedRemaining = sum(lines.map((l) => l.remaining));
   const budget = sum(lines.map((l) => l.planned));
   const forecast = spent + committed + estimatedRemaining;
-  const capitalValue = project?.capital ?? 0;
-  return { project, capital: capitalValue, spent, committed, estimatedRemaining, budget, forecast, cash: budget - spent, saldoForecast: forecast - spent };
+  const capitalEntradas = sum(movements.filter((m) => m.category === "Capital" && m.direction === "Entrada" && m.status === "Realizado").map((m) => m.value));
+  const capitalSaidas = sum(movements.filter((m) => m.category === "Capital" && m.direction === "Saída" && m.status === "Realizado").map((m) => m.value));
+  const capitalValue = capitalEntradas - capitalSaidas;
+  return { project, capital: capitalValue, spent, committed, estimatedRemaining, budget, forecast, cash: capitalValue - spent, saldoForecast: forecast - spent };
 }
 export type BudgetStatus = "ok" | "warn" | "over";
 export function budgetStatus(balance: number, budget: number): BudgetStatus {

@@ -45,12 +45,10 @@ function AdminHome() {
         <div className="bg-primary p-7 text-primary-foreground">
           <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio sob gestão</p>
           <p className="num mt-4 font-display text-4xl md:text-5xl">{brlShort(patrimonioSobGestao)}</p>
-          <p className="mt-3 text-sm opacity-70">Aportes menos resgates realizados</p>
         </div>
         <div className="bg-card p-7">
           <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Faturamento {currentYear}</p>
           <p className="num mt-4 font-display text-4xl text-primary md:text-5xl">{brlShort(faturamentoAno)}</p>
-          <p className="mt-3 text-sm text-muted-foreground">Entradas operacionais realizadas no ano</p>
         </div>
       </div>
 
@@ -251,13 +249,14 @@ function TocAnalysis({ open, onToggle }: { open: boolean; onToggle: () => void }
 
 function Charts() {
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const { data } = useAdmin();
 
   return (
     <div className="mt-8 space-y-8">
       {/* Previsto vs Realizado */}
       <div className="border bg-card p-4 md:p-6">
         <h2 className="mb-4 font-display text-xl text-primary">Previsto vs Realizado</h2>
-        <PrevistVsRealizadoChart />
+        <PrevistVsRealizadoChart period="year" movements={data.movements} />
       </div>
 
       {/* TOC Pipeline */}

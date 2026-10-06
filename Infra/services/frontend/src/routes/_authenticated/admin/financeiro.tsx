@@ -19,16 +19,19 @@ void quoteTotal;
 export const Route = createFileRoute("/_authenticated/admin/financeiro")({
   head: () => ({
     meta: [
-      { title: "Financeiro — Administração MD70" },
+      { title: "Lançamentos — Administração MD70" },
       { name: "description", content: "Entradas, saídas e compromissos financeiros dos empreendimentos MD70." },
     ],
   }),
   component: Financeiro,
 });
 
-const CATEGORIES = ["Capital", "Comissão", "Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 const OBRA_TYPES = ["MO", "Material"];
-const OBRA_CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
+const OBRA_CATEGORIES = ["Capital", "Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
+
+function originLabel(description: string): string {
+  return description.includes(" — ") ? description.split(" — ")[0]! : description;
+}
 
 // ─── Movement detail drawer ───────────────────────────────────────────────────
 
@@ -63,7 +66,7 @@ function MovementDrawer({
 
   const initForm: DrawerForm = {
     description: movement?.description ?? "",
-    category: movement?.category ?? CATEGORIES[0]!,
+    category: movement?.category ?? "Comissão",
     direction: movement?.direction ?? "Saída",
     value: String(movement?.value ?? ""),
     date: movement?.date ?? new Date().toISOString().slice(0, 10),
@@ -72,9 +75,9 @@ function MovementDrawer({
     is_operational: movement?.isOperational ?? false,
     development_id: movement?.projectId ?? projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
     obra_type: movement?.obraType ?? OBRA_TYPES[0]!,
-    obra_category: movement?.obraCategory ?? OBRA_CATEGORIES[0]!,
+    obra_category: movement?.obraCategory ?? movement?.category ?? OBRA_CATEGORIES[0]!,
     cnpj: movement?.cnpj ?? "",
-    recipient_name: movement?.recipientName ?? "",
+    recipient_name: movement?.recipientName || (movement ? originLabel(movement.description) : ""),
     attachment_url: movement?.attachments?.[0] ?? "",
   };
   const [form, setForm] = useState<DrawerForm>(initForm);
@@ -104,10 +107,10 @@ function MovementDrawer({
       obra_category?: string;
       cnpj?: string;
       recipient_name?: string;
+      attachment_url?: string | null;
     };
     const upd: PatchPayload = { id: movement!.id };
     if (form.description !== movement!.description) upd.description = form.description;
-    if (form.category !== movement!.category) upd.category = form.category;
     if (form.direction !== movement!.direction) upd.direction = form.direction;
     const v = parseFloat(form.value);
     if (!isNaN(v) && v !== movement!.value) upd.value = v;
@@ -117,9 +120,15 @@ function MovementDrawer({
     if (form.is_operational !== (movement!.isOperational ?? false)) upd.is_operational = form.is_operational;
     if (!form.is_operational && form.development_id !== movement!.projectId) upd.development_id = form.development_id;
     if (!form.is_operational && form.obra_type !== (movement!.obraType ?? "")) upd.obra_type = form.obra_type;
-    if (!form.is_operational && form.obra_category !== (movement!.obraCategory ?? "")) upd.obra_category = form.obra_category;
+    if (form.is_operational) {
+      if (form.category !== movement!.category) upd.category = form.category;
+    } else {
+      if (form.obra_category !== movement!.category) upd.category = form.obra_category;
+      if (form.obra_category !== (movement!.obraCategory ?? "")) upd.obra_category = form.obra_category;
+    }
     if (form.cnpj !== (movement!.cnpj ?? "")) upd.cnpj = form.cnpj;
     if (form.recipient_name !== (movement!.recipientName ?? "")) upd.recipient_name = form.recipient_name;
+    if (form.attachment_url !== (movement!.attachments?.[0] ?? "")) upd.attachment_url = form.attachment_url || null;
     if (Object.keys(upd).length === 1) { toast("Sem alterações."); return; }
     patchMovement.mutate(upd, {
       onSuccess: () => { toast.success("Lançamento salvo."); onClose(); },
@@ -190,7 +199,7 @@ function MovementDrawer({
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs text-muted-foreground">Categoria da obra</label>
+                  <label className="block text-xs text-muted-foreground">Categoria</label>
                   <select value={form.obra_category} onChange={(e) => setStr("obra_category", e.target.value)}
                     className="mt-1 w-full border bg-background px-3 py-2 text-sm">
                     {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
@@ -217,13 +226,15 @@ function MovementDrawer({
                   <option value="Saída">Saída</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs text-muted-foreground">Categoria</label>
-                <select value={form.category} onChange={(e) => setStr("category", e.target.value)}
-                  className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
+              {form.is_operational && (
+                <div>
+                  <label className="block text-xs text-muted-foreground">Categoria</label>
+                  <select value={form.category} onChange={(e) => setStr("category", e.target.value)}
+                    className="mt-1 w-full border bg-background px-3 py-2 text-sm">
+                    <option value="Comissão">Comissão</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-muted-foreground">Valor (R$)</label>
                 <input type="number" min="0.01" step="0.01" value={form.value} onChange={(e) => setStr("value", e.target.value)}
@@ -265,6 +276,7 @@ function MovementDrawer({
               <div>
                 <label className="block text-xs text-muted-foreground">Nome / Razão social</label>
                 <input value={form.recipient_name} onChange={(e) => setStr("recipient_name", e.target.value)} maxLength={200}
+                  placeholder={originLabel(movement.description)}
                   className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
               </div>
             </div>
@@ -295,9 +307,16 @@ function MovementDrawer({
               <p className="text-xs text-muted-foreground mb-2">Sem anexo.</p>
             )}
             <div className="mt-2">
-              <label className="block text-xs text-muted-foreground">URL do anexo</label>
-              <input type="url" value={form.attachment_url} onChange={(e) => setStr("attachment_url", e.target.value)}
-                className="mt-1 w-full border bg-background px-3 py-2 text-sm" placeholder="https://…" />
+              <label className="block text-xs text-muted-foreground">Anexar arquivo (PDF ou imagem)</label>
+              <input type="file" accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => setStr("attachment_url", reader.result as string);
+                  reader.readAsDataURL(file);
+                }}
+                className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
             </div>
           </section>
 
@@ -416,7 +435,7 @@ function NewMovementDialog({
   const [form, setForm] = useState({
     development_id: projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
     description: "",
-    category: CATEGORIES[0],
+    category: "Comissão",
     direction: "Saída" as "Entrada" | "Saída",
     value: "",
     date: today,
@@ -438,7 +457,7 @@ function NewMovementDialog({
       await createMovement.mutateAsync({
         development_id: form.is_operational ? "fundo-md70" : form.development_id,
         description: form.description.trim(),
-        category: form.category,
+        category: form.is_operational ? form.category : form.obra_category,
         direction: form.direction,
         value,
         date: form.date,
@@ -489,7 +508,7 @@ function NewMovementDialog({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium">Categoria da obra</label>
+                <label className="block text-sm font-medium">Categoria</label>
                 <select value={form.obra_category} onChange={(e) => set("obra_category", e.target.value)}
                   className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
                   {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
@@ -510,13 +529,15 @@ function NewMovementDialog({
               <option value="Saída">Saída</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Categoria</label>
-            <select value={form.category} onChange={(e) => set("category", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
+          {form.is_operational && (
+            <div>
+              <label className="block text-sm font-medium">Categoria</label>
+              <select value={form.category} onChange={(e) => set("category", e.target.value)}
+                className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
+                <option value="Comissão">Comissão</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium">Valor (R$) *</label>
             <input required type="number" min="0.01" step="0.01" value={form.value} onChange={(e) => set("value", e.target.value)}
@@ -716,7 +737,7 @@ function Financeiro() {
 
   return (
     <div className="lg:w-1/2 lg:mx-auto">
-      <AdminHeading title="Financeiro">Histórico de lançamentos por empreendimento.</AdminHeading>
+      <AdminHeading title="Lançamentos">Histórico de lançamentos por empreendimento.</AdminHeading>
 
       <div className="mb-6 flex gap-1 border-b">
         {(["caixa", "competencia"] as const).map((t) => (
@@ -735,6 +756,7 @@ function Financeiro() {
         : <CompetenciaTab onNew={() => setShowNew(true)} onSelect={setSelectedId} />}
 
       <MovementDrawer
+        key={selectedId ?? "none"}
         movement={selectedMovement}
         projects={data.projects}
         onClose={() => setSelectedId(null)}

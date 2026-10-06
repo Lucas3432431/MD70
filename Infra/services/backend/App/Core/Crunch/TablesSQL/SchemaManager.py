@@ -1249,7 +1249,6 @@ class SchemaManager:
                 category TEXT NOT NULL,
                 item TEXT NOT NULL,
                 planned REAL NOT NULL DEFAULT 0,
-                realized REAL NOT NULL DEFAULT 0,
                 committed REAL NOT NULL DEFAULT 0,
                 remaining REAL NOT NULL DEFAULT 0,
                 quantity REAL,
@@ -1260,6 +1259,14 @@ class SchemaManager:
             """,
             "Table: md70_budget_lines",
         )
+
+        # Migration: drop stale realized column (computed on frontend from movements)
+        if self._column_exists("md70_budget_lines", "realized"):
+            self.run_sql(
+                "ALTER TABLE md70_budget_lines DROP COLUMN realized;",
+                "Migration: drop realized from md70_budget_lines",
+                fail_silently=True,
+            )
 
         self.run_sql(
             "CREATE INDEX IF NOT EXISTS idx_md70_budget_lines_dev ON md70_budget_lines (development_id);",

@@ -15,8 +15,8 @@ const links = [
   { to: "/admin/empreendimentos",label: "Projetos",       short: "Projetos",   icon: Building2 },
   { to: "/admin/compras",        label: "Compras",        short: "Compras",    icon: ShoppingCart },
   { to: "/admin/crm",            label: "CRM",            short: "CRM",        icon: Users },
-  { to: "/admin/financeiro",     label: "Financeiro",     short: "Financeiro", icon: Wallet },
   { to: "/admin/relatorios",     label: "Relatórios",     short: "Relatórios", icon: BarChart3 },
+  { to: "/admin/financeiro",     label: "Lançamentos",    short: "Lançamentos",icon: Wallet },
 ] as const;
 
 type AdminContextValue = { data: AdminData; setData: React.Dispatch<React.SetStateAction<AdminData>> };
@@ -80,7 +80,7 @@ function AdminWorkspace({ initialData, isPending, isError }: { initialData: Admi
 
   return (
     <AdminContext.Provider value={value}>
-      <div className="min-h-screen bg-background pb-[calc(2.75rem+env(safe-area-inset-bottom))] md:pb-[calc(3rem+env(safe-area-inset-bottom))] lg:pr-0">
+      <div className="min-h-screen bg-background pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pr-0">
         {/* Header */}
         <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
           <div className="mx-auto grid h-16 max-w-[90rem] grid-cols-[auto_1fr_auto] items-center gap-4 px-4 md:px-8">

@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchLead, useCreateLead, useDeleteLead } from "@/lib/hooks/useAdminData";
 import { brl } from "@/lib/format";
+import { sum } from "@/lib/data/admin-calculations";
 import { cn } from "@/lib/utils";
 import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose,
@@ -19,15 +20,15 @@ export const Route = createFileRoute("/_authenticated/admin/crm")({
   component: CRM,
 });
 
-const STAGES: LeadStatus[] = ["Interesse", "Qualificado", "Em negociação", "Investidor ativo", "Descartado"];
+const STAGES: LeadStatus[] = ["Interesse", "Qualificado", "Em negociação", "Investidor ativo", "Descartado/Adiado"];
 const SOURCES = ["Site", "Indicação", "LinkedIn", "Instagram", "WhatsApp", "Evento", "Outro"];
 
 const STAGE_COLOR: Record<LeadStatus, string> = {
-  "Interesse":        "border-t-muted-foreground/30",
-  "Qualificado":      "border-t-blue-300",
-  "Em negociação":    "border-t-warning",
-  "Investidor ativo": "border-t-positive",
-  "Descartado":       "border-t-destructive/40",
+  "Interesse":          "border-t-muted-foreground/30",
+  "Qualificado":        "border-t-blue-300",
+  "Em negociação":      "border-t-warning",
+  "Investidor ativo":   "border-t-positive",
+  "Descartado/Adiado":  "border-t-destructive/40",
 };
 
 // ─── Lead detail drawer ───────────────────────────────────────────────────────
@@ -35,10 +36,12 @@ const STAGE_COLOR: Record<LeadStatus, string> = {
 function LeadDrawer({
   lead,
   projects,
+  investedByName,
   onClose,
 }: {
   lead: Lead | null;
   projects: { id: string; name: string }[];
+  investedByName: Map<string, number>;
   onClose: () => void;
 }) {
   const patchLead = usePatchLead();
@@ -105,7 +108,9 @@ function LeadDrawer({
     });
   }
 
+  const isActiveInvestor = lead.status === "Investidor ativo";
   const totalPotential = interests.reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const investedValue = investedByName.get(lead.name) ?? 0;
 
   return (
     <Drawer open onOpenChange={(v) => !v && onClose()}>
@@ -156,8 +161,14 @@ function LeadDrawer({
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground">Potencial total</label>
-                <p className="num mt-2 text-sm font-semibold text-primary">{totalPotential > 0 ? brl(totalPotential) : "—"}</p>
+                <label className="block text-xs text-muted-foreground">
+                  {isActiveInvestor ? "Valor investido" : "Potencial total"}
+                </label>
+                <p className={`num mt-2 text-sm font-semibold ${isActiveInvestor ? "text-positive" : "text-primary"}`}>
+                  {isActiveInvestor
+                    ? (investedValue > 0 ? brl(investedValue) : "—")
+                    : (totalPotential > 0 ? brl(totalPotential) : "—")}
+                </p>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs text-muted-foreground">Observações</label>
@@ -295,6 +306,17 @@ function CRM() {
   const [showNew, setShowNew] = useState(false);
   const selectedLead = selected ? data.leads.find((l) => l.id === selected) ?? null : null;
 
+  const investedByName = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of data.movements.filter((m) => m.category === "Capital" && m.status === "Realizado")) {
+      const name = m.description.includes(" — ") ? m.description.split(" — ")[0]! : null;
+      if (!name) continue;
+      const delta = m.direction === "Entrada" ? m.value : -m.value;
+      map.set(name, (map.get(name) ?? 0) + delta);
+    }
+    return map;
+  }, [data.movements]);
+
   return (
     <>
       <AdminHeading title="CRM">Leads e investidores por empreendimento e estágio do funil.</AdminHeading>
@@ -309,6 +331,7 @@ function CRM() {
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
             const cards = data.leads.filter((l) => l.status === stage);
+            const isActive = stage === "Investidor ativo";
             return (
               <div key={stage} className="flex w-52 shrink-0 flex-col">
                 <div className={cn("mb-3 border-t-2 pt-3", STAGE_COLOR[stage])}>
@@ -319,7 +342,9 @@ function CRM() {
                   {cards.map((lead) => {
                     const interests = lead.projectInterests ?? (lead.projectInterest ? [{ projectId: lead.projectInterest, value: lead.value }] : []);
                     const projNames = interests.map((pi) => data.projects.find((p) => p.id === pi.projectId)?.name).filter(Boolean);
-                    const totalValue = interests.reduce((s, i) => s + ((i as { value?: number }).value ?? 0), 0);
+                    const invested = isActive ? (investedByName.get(lead.name) ?? 0) : 0;
+                    const potentialValue = interests.reduce((s, i) => s + ((i as { value?: number }).value ?? 0), 0);
+                    const displayValue = isActive ? invested : potentialValue;
                     return (
                       <button key={lead.id} onClick={() => setSelected(lead.id)}
                         className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
@@ -329,7 +354,9 @@ function CRM() {
                         </p>
                         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                           <span className="truncate rounded-sm bg-muted px-1.5 py-0.5 text-[10px]">{lead.source}</span>
-                          {totalValue > 0 && <span className="num shrink-0">{brl(totalValue)}</span>}
+                          {displayValue > 0 && (
+                            <span className={cn("num shrink-0", isActive && "text-positive")}>{brl(displayValue)}</span>
+                          )}
                         </div>
                       </button>
                     );
@@ -345,8 +372,10 @@ function CRM() {
       <p className="mt-5 text-xs text-muted-foreground">{data.leads.length} lead{data.leads.length !== 1 ? "s" : ""} no total.</p>
 
       <LeadDrawer
+        key={selected ?? "none"}
         lead={selectedLead}
         projects={data.projects}
+        investedByName={investedByName}
         onClose={() => setSelected(null)}
       />
 

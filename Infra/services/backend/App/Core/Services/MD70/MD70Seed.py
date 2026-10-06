@@ -90,19 +90,19 @@ def seed_md70_data(engine) -> None:
         # md70_budget_lines
         # ------------------------------------------------------------------ #
         budget_lines = [
-            # id, development_id, category, item, planned, realized, committed, remaining
-            ("bl1", "saude-rio-claro", "Aquisição e Docs", "Aquisição do imóvel e documentação", 215_000, 210_000, 0, 5_000),
-            ("bl2", "saude-rio-claro", "Projeto / Estudos", "Projeto e estudos técnicos",          5_000,   5_000, 0,     0),
-            ("bl3", "saude-rio-claro", "Obra",              "Construção e reforma",               180_000,  90_000, 0, 55_000),
+            # id, development_id, category, item, planned, committed, remaining
+            ("bl1", "saude-rio-claro", "Aquisição e Docs", "Aquisição do imóvel e documentação", 215_000, 0,      0),
+            ("bl2", "saude-rio-claro", "Projeto / Estudos", "Projeto e estudos técnicos",          5_000, 0,  3_400),
+            ("bl3", "saude-rio-claro", "Obra",              "Construção e reforma",               180_000, 0, 55_000),
         ]
-        for bl_id, dev_id, category, item, planned, realized, committed, remaining in budget_lines:
+        for bl_id, dev_id, category, item, planned, committed, remaining in budget_lines:
             conn.execute(text(
                 "INSERT INTO md70_budget_lines "
-                "(id, development_id, category, item, planned, realized, committed, remaining) "
-                "VALUES (:id, :dev_id, :category, :item, :planned, :realized, :committed, :remaining)"
+                "(id, development_id, category, item, planned, committed, remaining) "
+                "VALUES (:id, :dev_id, :category, :item, :planned, :committed, :remaining)"
             ), {
                 "id": bl_id, "dev_id": dev_id, "category": category, "item": item,
-                "planned": planned, "realized": realized, "committed": committed,
+                "planned": planned, "committed": committed,
                 "remaining": remaining,
             })
 
@@ -199,7 +199,7 @@ def seed_md70_data(engine) -> None:
         leads = [
             # id, name, email, phone, project_interest, status, source, value, notes, created_at
             ("l1", "Cachorrão",     "cachorrão@md70.local",     None, "saude-rio-claro", "Investidor ativo", "Indicação", 105_000, None, "2026-01-10"),
-            ("l2", "Mexicano",      "mexicano@md70.local",      None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
+            ("l2", "Mexicano",      "mexicano@md70.local",      None, "saude-rio-claro", "Descartado/Adiado", "Indicação",     0, None, "2026-01-10"),
             ("l3", "Fernando",      "fernando@md70.local",      None, "saude-rio-claro", "Investidor ativo", "Indicação",  92_000, None, "2026-01-10"),
             ("l4", "Du",            "du@md70.local",            None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
             ("l5", "Daniel Guedes", "daniel@md70.local",        None, "saude-rio-claro", "Investidor ativo", "Indicação", 130_000, None, "2026-01-10"),
