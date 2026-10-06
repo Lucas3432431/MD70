@@ -11,6 +11,15 @@ async function checkAuth() {
   }
 }
 
+async function tryRefresh() {
+  try {
+    await api.post("/auth/refresh");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ location }) => {
@@ -19,7 +28,12 @@ export const Route = createFileRoute("/_authenticated")({
       if (role) return { user: DEV_USERS[role] };
     }
 
-    const user = await checkAuth();
+    let user = await checkAuth();
+    if (!user) {
+      const refreshed = await tryRefresh();
+      if (refreshed) user = await checkAuth();
+    }
+
     if (!user) {
       const isAdmin = location.pathname.startsWith("/admin");
       throw redirect({ to: isAdmin ? "/login/admin" : "/login" });

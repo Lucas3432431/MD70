@@ -25,10 +25,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ToolCallGroup } from "./ToolMessageDisplay";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
+  tool?: string | null;
 }
 
 const WAVEFORM_BARS = 24;
@@ -42,12 +44,12 @@ function jsonHeaders() {
   return { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() };
 }
 
-export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> = ({ onPanelChange }) => {
+export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collapsed" | "open") => void }> = ({ onPanelChange }) => {
   const navigate = useNavigate();
-  const { chat: urlChatId } = useSearch({ strict: false }) as { chat?: string };
+  const { chat: urlChatId, panel: urlPanel } = useSearch({ strict: false }) as { chat?: string; panel?: string };
+  const sideExpanded = urlPanel !== "collapsed";
 
   const [chatStarted, setChatStarted] = useState(!!urlChatId);
-  const [sideExpanded, setSideExpanded] = useState(true);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -70,6 +72,16 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
   const animFrameRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const loadedChatRef = useRef<string | null>(null);
+
+  const collapsePanel = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, panel: "collapsed" })) as any, replace: false });
+  }, [navigate]);
+
+  const expandPanel = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    navigate({ search: ((prev: Record<string, unknown>) => { const { panel: _, ...rest } = prev; return rest; }) as any, replace: false });
+  }, [navigate]);
 
   // ── Scroll to bottom ────────────────────────────────────────────────────
   useEffect(() => {
@@ -94,16 +106,15 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
     loadedChatRef.current = urlChatId;
     setChatId(urlChatId);
     setChatStarted(true);
-    setSideExpanded(true);
 
     fetch(`/api/chat/${urlChatId}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
-        const raw: Array<{ role: string; content: string }> = data.messages ?? data;
+        const raw: Array<{ role: string; content: string; tool?: string | null }> = data.messages ?? data;
         const hydrated: Message[] = raw
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+          .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "tool")
+          .map((m) => ({ role: m.role as Message["role"], content: m.content, tool: m.tool ?? null }));
         setMessages(hydrated);
       })
       .catch(() => {/* silent */});
@@ -178,7 +189,6 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
 
       if (!chatStarted) {
         setChatStarted(true);
-        setSideExpanded(true);
         setMobileExpanded(true);
       }
 
@@ -199,7 +209,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
           // Mark as loaded BEFORE navigate so the URL-change useEffect skips the re-fetch
           loadedChatRef.current = activeChatId;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, chat: activeChatId! })) as any, replace: false });
+          navigate({ search: ((prev: Record<string, unknown>) => { const { panel: _, ...rest } = prev; return { ...rest, chat: activeChatId! }; }) as any, replace: false });
         }
 
         // Send the actual message (new or existing chat)
@@ -228,7 +238,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
     setChatId(null);
     loadedChatRef.current = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    navigate({ search: ((prev: Record<string, unknown>) => { const { chat: _, ...rest } = prev; return rest; }) as any, replace: false });
+    navigate({ search: ((prev: Record<string, unknown>) => { const { chat: _, panel: __, ...rest } = prev; return rest; }) as any, replace: false });
   }, [navigate]);
 
   // ── Recording helpers ───────────────────────────────────────────────────
@@ -315,7 +325,8 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
   const canSend = (input.trim().length > 0 || selectedFile !== null) && !pending;
 
   const panelOpen = chatStarted && sideExpanded;
-  useEffect(() => { onPanelChange?.(panelOpen); }, [panelOpen, onPanelChange]);
+  const panelState = !chatStarted ? "closed" : sideExpanded ? "open" : "collapsed";
+  useEffect(() => { onPanelChange?.(panelState as "closed" | "collapsed" | "open"); }, [panelState, onPanelChange]);
 
   // ── Input row ────────────────────────────────────────────────────────────
   const InputRow = (
@@ -387,46 +398,88 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
     </>
   );
 
+  // ── Segment messages — consecutive tool messages become one group ─────────
+  type MsgSeg =
+    | { type: "single"; msg: Message; idx: number }
+    | { type: "group"; items: Message[]; startIdx: number };
+  const msgSegs: MsgSeg[] = [];
+  {
+    let grp: Message[] | null = null;
+    let grpStart = 0;
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role === "tool") {
+        if (!grp) { grp = []; grpStart = i; }
+        grp.push(m);
+      } else {
+        if (grp) { msgSegs.push({ type: "group", items: grp, startIdx: grpStart }); grp = null; }
+        msgSegs.push({ type: "single", msg: m, idx: i });
+      }
+    }
+    if (grp) msgSegs.push({ type: "group", items: grp, startIdx: grpStart });
+  }
+
   // ── Message list ─────────────────────────────────────────────────────────
   const MessageList = (
     <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-      {messages.map((msg, i) => (
-        <div key={i} className={cn(
-          "rounded-xl px-3 py-2 text-sm",
-          msg.role === "user"
-            ? "ml-auto max-w-[80%] bg-primary text-primary-foreground whitespace-pre-wrap"
-            : "max-w-[80%] bg-muted text-foreground",
-        )}>
-          {msg.role === "assistant" ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>,
-                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>,
-                li: ({ children }) => <li>{children}</li>,
-                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                em: ({ children }) => <em className="italic">{children}</em>,
-                code: ({ children, className }) => {
-                  const isBlock = className?.includes("language-");
-                  return isBlock
-                    ? <code className="block rounded bg-background/60 px-2 py-1 text-xs font-mono whitespace-pre-wrap my-1">{children}</code>
-                    : <code className="rounded bg-background/60 px-1 text-xs font-mono">{children}</code>;
-                },
-                pre: ({ children }) => <pre className="mb-2 overflow-x-auto last:mb-0">{children}</pre>,
-                h1: ({ children }) => <h1 className="mb-1 font-semibold text-base">{children}</h1>,
-                h2: ({ children }) => <h2 className="mb-1 font-semibold">{children}</h2>,
-                h3: ({ children }) => <h3 className="mb-1 font-medium">{children}</h3>,
-                a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80">{children}</a>,
-                blockquote: ({ children }) => <blockquote className="border-l-2 border-muted-foreground/40 pl-2 italic text-muted-foreground">{children}</blockquote>,
-                hr: () => <hr className="my-2 border-muted-foreground/20" />,
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
-          ) : msg.content}
-        </div>
-      ))}
+      {msgSegs.map((seg) => {
+          if (seg.type === "group") {
+            return (
+              <ToolCallGroup
+                key={`group-${seg.startIdx}`}
+                tools={seg.items.map(m => ({ content: m.content, tool: m.tool ?? null }))}
+              />
+            );
+          }
+          const { msg, idx } = seg;
+          return (
+            <div key={`single-${idx}`} className={cn(
+              "rounded-xl px-3 py-2 text-lg",
+              msg.role === "user"
+                ? "ml-auto max-w-[80%] bg-primary text-primary-foreground whitespace-pre-wrap"
+                : "max-w-[85%] text-foreground",
+            )}>
+              {msg.role === "assistant" ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>,
+                    li: ({ children }) => <li>{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    code: ({ children, className }) => {
+                      const isBlock = className?.includes("language-");
+                      return isBlock
+                        ? <code className="block rounded bg-muted/60 px-2 py-1 text-xs font-mono whitespace-pre-wrap my-1">{children}</code>
+                        : <code className="rounded bg-muted/60 px-1 text-xs font-mono">{children}</code>;
+                    },
+                    pre: ({ children }) => <pre className="mb-2 overflow-x-auto last:mb-0">{children}</pre>,
+                    h1: ({ children }) => <h1 className="mb-2 mt-1 font-semibold text-xl">{children}</h1>,
+                    h2: ({ children }) => <h2 className="mb-1.5 mt-1 font-semibold text-lg">{children}</h2>,
+                    h3: ({ children }) => <h3 className="mb-1 font-medium">{children}</h3>,
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80">{children}</a>,
+                    blockquote: ({ children }) => <blockquote className="border-l-2 border-muted-foreground/40 pl-3 italic text-muted-foreground my-1">{children}</blockquote>,
+                    hr: () => <hr className="my-2 border-muted-foreground/20" />,
+                    table: ({ children }) => (
+                      <div className="my-2 overflow-x-auto rounded-lg border border-border/50">
+                        <table className="min-w-full border-collapse text-sm">{children}</table>
+                      </div>
+                    ),
+                    thead: ({ children }) => <thead className="bg-muted/50 border-b border-border/50">{children}</thead>,
+                    tbody: ({ children }) => <tbody className="divide-y divide-border/30">{children}</tbody>,
+                    tr: ({ children }) => <tr>{children}</tr>,
+                    th: ({ children }) => <th className="px-3 py-2 text-left text-base font-bold text-foreground whitespace-nowrap">{children}</th>,
+                    td: ({ children }) => <td className="px-3 py-2 text-sm text-foreground/80">{children}</td>,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : msg.content}
+            </div>
+          );
+      })}
       {pending && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /><span>Gerando resposta…</span>
@@ -443,56 +496,59 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (open: boolean) => void }> 
 
       <aside
         className={cn(
-          "hidden lg:flex flex-col fixed right-0 top-16 z-30 bg-background border-l",
-          "bottom-[calc(44px+env(safe-area-inset-bottom))]",
-          "transition-[width] duration-300 ease-in-out overflow-hidden",
-          chatStarted
-            ? sideExpanded ? "w-[33vw]" : "w-[52px]"
-            : "w-0 border-l-0",
+          "hidden lg:flex flex-col fixed right-4 z-30 rounded-2xl overflow-hidden bg-background",
+          "bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)]",
+          "transition-[width,opacity] duration-300 ease-in-out",
+          "shadow-[0_8px_40px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)]",
+          !chatStarted ? "w-0 opacity-0 pointer-events-none" :
+          sideExpanded ? "w-[33vw]" : "w-12",
         )}
+        style={{ top: "calc(4rem + 1rem)" }}
         aria-label="Chat — histórico"
       >
-        {chatStarted && (
-          <>
-            {/* Collapse/expand chevron */}
+        {chatStarted && (sideExpanded ? (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Chevron right — collapses panel, persists in URL */}
+            <div className="flex-shrink-0 flex items-center px-3 pt-3 pb-1">
+              <button
+                onClick={collapsePanel}
+                className="cursor-pointer p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="Recolher painel"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+            {/* Messages */}
+            {MessageList}
+            {/* Input inside panel */}
+            <div className="flex-shrink-0 border-t p-2">
+              <div
+                className="rounded-xl bg-muted/20 p-1"
+                style={{ boxShadow: "0 0 20px oklch(0.29 0.045 195 / 0.2), 0 2px 4px -1px rgba(0,0,0,0.06)" }}
+              >
+                {InputRow}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Collapsed state — chevron left expands, X closes */
+          <div className="flex flex-col items-center pt-3 gap-2">
             <button
-              onClick={() => setSideExpanded((v) => !v)}
-              className="absolute -left-[17px] top-1/2 -translate-y-1/2 z-10 flex h-8 w-[17px] items-center justify-center rounded-l-lg border border-r-0 bg-background hover:bg-muted transition-colors"
-              aria-label={sideExpanded ? "Recolher" : "Expandir"}
+              onClick={expandPanel}
+              className="cursor-pointer p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              aria-label="Expandir painel"
             >
-              {sideExpanded ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
+              <ChevronLeft className="size-4" />
             </button>
-
-            {sideExpanded ? (
-              <div className="flex flex-col h-full overflow-hidden">
-                {/* Header */}
-                <div className="flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b">
-                  <span className="font-semibold text-sm">Assistente MD70</span>
-                  <Button variant="ghost" size="icon" className="size-7 rounded-lg" onClick={closeChat} aria-label="Fechar conversa">
-                    <X className="size-3.5" />
-                  </Button>
-                </div>
-                {/* Messages */}
-                {MessageList}
-                {/* Input inside panel */}
-                <div className="flex-shrink-0 border-t p-2">
-                  <div
-                    className="rounded-xl bg-background p-1"
-                    style={{ boxShadow: "0 0 20px oklch(0.29 0.045 195 / 0.2), 0 2px 4px -1px rgba(0,0,0,0.06)" }}
-                  >
-                    {InputRow}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col h-full items-center justify-center">
-                <Button variant="ghost" size="icon" className="size-9 rounded-xl" onClick={closeChat} aria-label="Fechar conversa">
-                  <X className="size-4 text-muted-foreground" />
-                </Button>
-              </div>
-            )}
-          </>
-        )}
+            <button
+              onClick={closeChat}
+              className="cursor-pointer p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              aria-label="Fechar conversa"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        ))}
       </aside>
 
       {/* Desktop bottom input — only shown when panel is NOT open */}

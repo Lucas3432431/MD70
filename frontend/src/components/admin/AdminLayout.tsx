@@ -1,6 +1,6 @@
 import { Link, useRouterState, useNavigate, Outlet } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { LayoutDashboard, Building2, LogOut, Wallet, BarChart3, ShoppingCart, Users } from "lucide-react";
 import { Logo } from "@/components/site/Logo";
 import { Button } from "@/components/ui/button";
@@ -32,24 +32,23 @@ export function AdminGate() {
 }
 
 function AdminWorkspace({ initialData, isPending, isError }: { initialData: AdminData | null; isPending: boolean; isError: boolean }) {
-  const [data, setData] = useState<AdminData | null>(initialData);
-  useEffect(() => { if (initialData) setData(initialData); }, [initialData]);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const handlePanelChange = useCallback((open: boolean) => setPanelOpen(open), []);
+  const [mutatedData, setMutatedData] = useState<AdminData | null>(null);
+  const effectiveData = mutatedData ?? initialData ?? null;
+  const [panelState, setPanelState] = useState<"closed" | "collapsed" | "open">("closed");
 
   const value = useMemo(
-    () => (data ? { data, setData: setData as React.Dispatch<React.SetStateAction<AdminData>> } : null),
-    [data],
+    () => (effectiveData ? { data: effectiveData, setData: setMutatedData as React.Dispatch<React.SetStateAction<AdminData>> } : null),
+    [effectiveData],
   );
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const badges = useMemo(() => ({
-    "/admin/crm": data?.leads.filter(l => l.status === "Interesse").length ?? 0,
-    "/admin/compras": data?.purchases.filter(p => p.status === "Solicitado" || p.status === "Fornecedores Contatados").length ?? 0,
-    "/admin/empreendimentos": data?.projects.filter(p => p.status === "Oferecido / Interessado").length ?? 0,
-  }), [data]);
+    "/admin/crm": effectiveData?.leads.filter(l => l.status === "Interesse").length ?? 0,
+    "/admin/compras": effectiveData?.purchases.filter(p => p.status === "Solicitado" || p.status === "Fornecedores Contatados").length ?? 0,
+    "/admin/empreendimentos": effectiveData?.projects.filter(p => p.status === "Oferecido / Interessado").length ?? 0,
+  }), [effectiveData]);
 
   async function signOut() {
     if (IS_DEV && getDevRole()) {
@@ -65,7 +64,7 @@ function AdminWorkspace({ initialData, isPending, isError }: { initialData: Admi
     await navigate({ to: "/login", replace: true });
   }
 
-  if (isPending) {
+  if (isPending || (!value && !isError)) {
     return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">Verificando acesso…</main>;
   }
 
@@ -95,14 +94,17 @@ function AdminWorkspace({ initialData, isPending, isError }: { initialData: Admi
           </div>
         </header>
 
-        {/* Main — shifts left when chat panel is open */}
-        <div className={cn("transition-[padding] duration-300", panelOpen && "lg:pr-[33vw]")}>
+        <div className={cn(
+          "transition-[padding] duration-300",
+          panelState === "open" && "lg:pr-[calc(33vw+1rem)]",
+          panelState === "collapsed" && "lg:pr-16",
+        )}>
           <main className="mx-auto max-w-[90rem] px-4 py-8 md:px-8 md:py-10">
             <Outlet />
           </main>
         </div>
 
-        <AdminFloatingChat onPanelChange={handlePanelChange} />
+        <AdminFloatingChat onPanelChange={setPanelState} />
 
         {/* Bottom nav — compact */}
         <nav aria-label="Navegação administrativa" className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
