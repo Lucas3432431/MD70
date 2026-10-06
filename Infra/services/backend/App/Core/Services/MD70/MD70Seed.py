@@ -188,10 +188,10 @@ def seed_md70_data(engine) -> None:
         # ------------------------------------------------------------------ #
         leads = [
             # id, name, email, phone, project_interest, status, source, value, notes, created_at
-            ("l1", "Cachorrão", None, None, "saude-rio-claro", "Em negociação", "Indicação", 100_000, None, "2026-01-10"),
-            ("l2", "Mexicano",  None, None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
-            ("l3", "Fernando",  None, None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
-            ("l4", "Du",        None, None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
+            ("l1", "Cachorrão", "cachorrão@md70.local", None, "saude-rio-claro", "Em negociação", "Indicação", 100_000, None, "2026-01-10"),
+            ("l2", "Mexicano",  "mexicano@md70.local",  None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
+            ("l3", "Fernando",  "fernando@md70.local",  None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
+            ("l4", "Du",        "du@md70.local",        None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
         ]
         for l_id, name, email, phone, proj_interest, status, source, value, notes, created_at in leads:
             conn.execute(text(
