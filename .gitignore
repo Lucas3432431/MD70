@@ -43,3 +43,7 @@ compose.env
 
 # Runtime data & logs — never commit (banco SQLite, mídia e logs de produção)
 Infra/services/backend/Data/
+
+# Python bytecode
+__pycache__/
+*.pyc
