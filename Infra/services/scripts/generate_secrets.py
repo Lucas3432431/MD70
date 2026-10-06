@@ -24,8 +24,8 @@ CONTAINER_OVERRIDES = {
     "REDIS_HOST": "redis",
     "CHOKIDAR_USEPOLLING": "true",
     "WATCHPACK_POLLING": "true",
-    "SANDBOX_URL": "http://sandbox:8101",
-    "BROWSER_SERVICE_URL": "http://browser:8102",
+    "SANDBOX_URL": "http://sandbox:8001",
+    "BROWSER_SERVICE_URL": "http://browser:8002",
 }
 
 # Chaves não-VITE_ que o frontend precisa; o resto (senhas, chaves de API) fica só no backend
