@@ -205,7 +205,8 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:${FRONTEND_PORT}/health"]
+      # o app não expõe /health (404); "/" é o mesmo check do frontend/Dockerfile
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:${FRONTEND_PORT}/"]
       interval: 15s
       timeout: 5s
       retries: 5
