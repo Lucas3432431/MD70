@@ -117,8 +117,16 @@ def seed_md70_data(engine) -> None:
         # ------------------------------------------------------------------ #
         # id, dev_id, date, description, category, direction, value, status
         movements = [
-            ("mv00a", "saude-rio-claro", "2026-06-01", "Captação Cachorrão",  "Capital",   "Entrada", 100_000.00, "Realizado"),
-            ("mv00b", "saude-rio-claro", "2026-06-15", "Comissão na compra",  "Comissão",  "Entrada",  12_600.00, "Realizado"),
+            # Aportes e resgates de investidores
+            ("mv00a", "saude-rio-claro", "2026-06-01", "Daniel Guedes — Aporte",  "Capital", "Entrada", 173_000.00, "Realizado"),
+            ("mv00b", "saude-rio-claro", "2026-06-15", "Cachorrão — Aporte",      "Capital", "Entrada",  65_000.00, "Realizado"),
+            ("mv00c", "saude-rio-claro", "2026-07-01", "Fernando — Aporte",       "Capital", "Entrada",  92_000.00, "Realizado"),
+            ("mv00d", "saude-rio-claro", "2026-07-01", "Cachorrão — Aporte",      "Capital", "Entrada",  20_000.00, "Realizado"),
+            ("mv00e", "saude-rio-claro", "2026-07-10", "Daniel Guedes — Resgate", "Capital", "Saída",    43_000.00, "Realizado"),
+            ("mv00f", "saude-rio-claro", "2026-08-24", "Cachorrão — Aporte",      "Capital", "Entrada",  10_000.00, "Realizado"),
+            ("mv00g", "saude-rio-claro", "2026-09-11", "Cachorrão — Aporte",      "Capital", "Entrada",  10_000.00, "Realizado"),
+            # Receita operacional
+            ("mv00h", "saude-rio-claro", "2026-06-15", "Comissão na compra",      "Comissão","Entrada",  12_600.00, "Realizado"),
             ("mv01", "saude-rio-claro", "2026-06-01", "Compra da casa — Entrada",           "Aquisição do imóvel",    "Saída", 168_000.00, "Realizado"),
             ("mv02", "saude-rio-claro", "2026-06-15", "Compra da casa — Parcela",            "Aquisição do imóvel",    "Saída",   5_000.00, "Realizado"),
             ("mv03", "saude-rio-claro", "2026-07-01", "Arquiteta — 1° parcela",              "Projetos",               "Saída",   1_600.00, "Realizado"),
@@ -190,10 +198,11 @@ def seed_md70_data(engine) -> None:
         # ------------------------------------------------------------------ #
         leads = [
             # id, name, email, phone, project_interest, status, source, value, notes, created_at
-            ("l1", "Cachorrão", "cachorrão@md70.local", None, "saude-rio-claro", "Investidor ativo", "Indicação", 100_000, None, "2026-01-10"),
-            ("l2", "Mexicano",  "mexicano@md70.local",  None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
-            ("l3", "Fernando",  "fernando@md70.local",  None, "saude-rio-claro", "Investidor ativo", "Indicação",       0, None, "2026-01-10"),
-            ("l4", "Du",        "du@md70.local",        None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
+            ("l1", "Cachorrão",     "cachorrão@md70.local",     None, "saude-rio-claro", "Investidor ativo", "Indicação", 105_000, None, "2026-01-10"),
+            ("l2", "Mexicano",      "mexicano@md70.local",      None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
+            ("l3", "Fernando",      "fernando@md70.local",      None, "saude-rio-claro", "Investidor ativo", "Indicação",  92_000, None, "2026-01-10"),
+            ("l4", "Du",            "du@md70.local",            None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
+            ("l5", "Daniel Guedes", "daniel@md70.local",        None, "saude-rio-claro", "Investidor ativo", "Indicação", 130_000, None, "2026-01-10"),
         ]
         for l_id, name, email, phone, proj_interest, status, source, value, notes, created_at in leads:
             conn.execute(text(
