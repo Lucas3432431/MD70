@@ -1,0 +1,38 @@
+{
+  "credit_value_cost": 197,
+  "tools": {
+    "output_token_cost": 1630,
+    "brave-search": 15,
+    "visual-analysis-call": 200,
+    "asset": {
+      "image": {
+        "google-vertex": 133,
+        "default": 133
+      },
+      "video": {
+        "google-vertex": 1630,
+        "default": 1630
+      }
+    }
+  },
+  "providers": {
+    "deepseek": {
+      "pricing": {
+        "deepseek-chat": {
+          "input_cost_per_1m": 157,
+          "output_cost_per_1m": 638
+        }
+      }
+    },
+    "openai": {
+      "pricing": {
+        "whisper-1": {
+          "cost_per_minute": 60
+        },
+        "text-embedding-3-small": {
+          "cost_per_1m_tokens": 20
+        }
+      }
+    }
+  }
+}

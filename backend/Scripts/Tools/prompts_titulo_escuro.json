@@ -1,0 +1,6 @@
+[
+  {
+    "label": "titulo-decisoes-escuro",
+    "prompt": "Generate a professional advertising image based on this reference. PRESERVE ABSOLUTELY EVERYTHING — do NOT change under any circumstances: the person, pose, expression, clothing, background, lighting, color grading, composition, framing, the text block position, the text block size, the text block color, the text block style, the border radius, the padding, the typography style (font weight, font size hierarchy, line height, letter spacing), the subtitle text size and color, the CTA button style (shape, color, size, position), the CTA button text size. CHANGE ONLY the text content — replace the existing headline with exactly this text: 'Pare de tomar decisões no escuro.' — and replace the existing subtitle with: 'Seu assistente digital de marketing trabalha enquanto você cuida do negócio.' — and keep the CTA button text exactly as it is in the original. The result must be indistinguishable from the original in every visual aspect except the headline and subtitle text. Typography, layout, colors, and all visual elements must be pixel-perfect identical to the original."
+  }
+]

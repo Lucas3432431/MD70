@@ -34,3 +34,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive secrets — never commit
+secrets/
+*.secrets
+compose.env

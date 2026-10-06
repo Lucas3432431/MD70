@@ -1,0 +1,266 @@
+[
+  {
+    "name": "Trial",
+    "description": "Teste gratuito por 7 dias. Acesso completo para experimentar todas as funcionalidades principais.",
+    "message": "",
+    "plan_type": "trial",
+    "billing_type": "plan",
+    "sell": 0,
+    "users_limit": 1,
+    "cumulative_credits": 5,
+    "cumulative_resets_in": null,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 0.0, "annual": 0.0 },
+        "late_adopter":  { "monthly": 0.0, "annual": 0.0 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 0.0, "annual": 0.0 },
+        "late_adopter":  { "monthly": 0.0, "annual": 0.0 }
+      }
+    },
+    "features": {
+      "main_features": {
+        "pt": ["Testes Básicos", "Suporte por Email"],
+        "es": ["Pruebas Básicas", "Soporte por Email"],
+        "en": ["Basic Testing", "Email Support"]
+      },
+      "early_adopters_features": {
+        "pt": ["Renovação sem reajustes por 3 anos"],
+        "es": ["Renovación sin reajustes por 3 años"],
+        "en": ["Renewal without increases for 3 years"]
+      }
+    }
+  },
+  {
+    "name": "Free",
+    "description": "Perfeito para começar. Inclua projetos públicos e colaboradores ilimitados.",
+    "message": "",
+    "plan_type": "free",
+    "billing_type": "plan",
+    "sell": 0,
+    "users_limit": null,
+    "cumulative_credits": 10,
+    "cumulative_resets_in": null,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 0.0, "annual": 0.0 },
+        "late_adopter":  { "monthly": 0.0, "annual": 0.0 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 0.0, "annual": 0.0 },
+        "late_adopter":  { "monthly": 0.0, "annual": 0.0 }
+      }
+    },
+    "features": {
+      "main_features": {
+        "pt": ["10 créditos iniciais", "Projetos públicos", "Remixar templates"],
+        "es": ["10 créditos iniciales", "Proyectos públicos", "Remixar plantillas"],
+        "en": ["10 initial credits", "Public projects", "Remix templates"]
+      },
+      "early_adopters_features": {}
+    }
+  },
+  {
+    "name": "Pro",
+    "description": "Para times que querem resultado. IA enterprise, créditos acumuláveis e prioridade de processamento.",
+    "message": "100 créditos/mês acumuláveis por mês",
+    "plan_type": "pro",
+    "billing_type": "plan",
+    "sell": 1,
+    "users_limit": null,
+    "cumulative_credits": 50,
+    "cumulative_resets_in": 720,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 131.33, "annual": 1175.88 },
+        "late_adopter":  { "monthly": 164.64, "annual": 1474.25 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 39.0,   "annual": 390.0 },
+        "late_adopter":  { "monthly": 49.0,   "annual": 490.0 }
+      }
+    },
+    "features": {
+      "main_features": {
+        "pt": [
+          "Tudo do plano Free",
+          "3x mais prioridade de processamento que o Free",
+          "100 créditos/mês acumuláveis",
+          "IA enterprise baseada em uso",
+          "Top-ups de créditos sob demanda",
+          "Remover badge MD70"
+        ],
+        "es": [
+          "Todo del plan Free",
+          "3x más prioridad de procesamiento que el Free",
+          "100 créditos/mes acumulables",
+          "IA enterprise basado en uso",
+          "Top-ups de créditos bajo demanda",
+          "Eliminar insignia MD70"
+        ],
+        "en": [
+          "All Free features",
+          "3x more processing priority than Free",
+          "100 stackable credits/month",
+          "Usage-based enterprise AI",
+          "On-demand credit top-ups",
+          "Remove the MD70 badge"
+        ]
+      },
+      "early_adopters_features": {
+        "pt": ["Suporte Prioritário", "Acesso Antecipado a Features", "Renovação sem reajustes por 3 anos"],
+        "es": ["Soporte Prioritario", "Acceso Anticipado a Features", "Renovación sin reajustes por 3 años"],
+        "en": ["Priority Support", "Early Access to Features", "Renewal without increases for 3 years"]
+      }
+    }
+  },
+  {
+    "name": "Business",
+    "description": "Para empresas que precisam de escala, controle e resultados consistentes. IA dedicada com suporte de alto nível.",
+    "message": "500 créditos/mês acumuláveis por mês",
+    "plan_type": "business",
+    "billing_type": "plan",
+    "sell": 1,
+    "users_limit": null,
+    "cumulative_credits": 500,
+    "cumulative_resets_in": 720,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 779.99,  "annual": 7799.9 },
+        "late_adopter":  { "monthly": 979.99,  "annual": 9799.9 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 197.0,   "annual": 1970.0 },
+        "late_adopter":  { "monthly": 197.0,   "annual": 1970.0 }
+      }
+    },
+    "features": {
+      "main_features": {
+        "pt": [
+          "Tudo do plano Pro",
+          "3x mais prioridade de processamento que o Pro",
+          "IA enterprise dedicada",
+          "Gerente de Sucesso Dedicado",
+          "Onboarding personalizado"
+        ],
+        "es": [
+          "Todo del plan Pro",
+          "3x más prioridad de procesamiento que el Pro",
+          "IA enterprise dedicada",
+          "Gerente de Éxito Dedicado",
+          "Onboarding personalizado"
+        ],
+        "en": [
+          "All Pro features",
+          "3x more processing priority than Pro",
+          "Dedicated enterprise AI",
+          "Dedicated Success Manager",
+          "Personalized onboarding"
+        ]
+      },
+      "early_adopters_features": {
+        "pt": ["Renovação sem reajustes por 3 anos"],
+        "es": ["Renovación sin reajustes por 3 años"],
+        "en": ["Renewal without increases for 3 years"]
+      }
+    }
+  },
+  {
+    "name": "Enterprise",
+    "description": "Soluções personalizadas para grandes corporações. Infraestrutura dedicada, SLA garantido e integrações sob medida.",
+    "message": "5000 créditos/mês, infraestrutura dedicada e suporte 24/7",
+    "plan_type": "enterprise",
+    "billing_type": "plan",
+    "sell": 1,
+    "users_limit": null,
+    "cumulative_credits": 5000,
+    "cumulative_resets_in": 720,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 7839.99,  "annual": 78399.9 },
+        "late_adopter":  { "monthly": 9799.99,  "annual": 117599.88 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 1598.39,  "annual": 15983.9 },
+        "late_adopter":  { "monthly": 1997.99,  "annual": 23975.88 }
+      }
+    },
+    "features": {
+      "main_features": {
+        "pt": [
+          "Tudo do plano Business",
+          "3x mais prioridade de processamento que o Business",
+          "SSO & SAML",
+          "Infraestrutura Dedicada",
+          "SLA Garantido",
+          "Integrações sob medida",
+          "Chat confidenciais (não será usado para estudo e melhora de produto)",
+          "Contato com direto com suporte para personalizacões visando conformidade de Compliance"
+        ],
+        "es": [
+          "Todo del plan Business",
+          "3x más prioridad de procesamiento que el Business",
+          "SSO & SAML",
+          "Infraestructura Dedicada",
+          "SLA Garantizado",
+          "Integraciones a medida",
+          "Chat confidenciales (no se usará para estudio y mejora del producto)",
+          "Contacto directo con soporte para personalizaciones con miras a la conformidad de Compliance"
+        ],
+        "en": [
+          "All Business features",
+          "3x more processing priority than Business",
+          "SSO & SAML",
+          "Dedicated Infrastructure",
+          "Guaranteed SLA",
+          "Custom integrations",
+          "Confidential Chats (will not be used for product study and improvement)",
+          "Direct contact with support for customizations aiming for Compliance conformity"
+        ]
+      },
+      "early_adopters_features": {
+        "pt": ["Migração Gratuita", "Renovação sem reajustes por 3 anos"],
+        "es": ["Migración Gratuita", "Renovación sin reajustes por 3 años"],
+        "en": ["Free Migration", "Renewal without increases for 3 years"]
+      }
+    }
+  },
+  {
+    "name": "Extra",
+    "description": "Compre créditos adicionais conforme necessário. Flexibilidade total para consumo além do seu plano.",
+    "message": "Compre créditos avulsos - 1 crédito = 3 reais",
+    "plan_type": "extra",
+    "billing_type": "extra",
+    "sell": 1,
+    "users_limit": 1,
+    "cumulative_credits": 1,
+    "cumulative_resets_in": 720,
+    "non_cumulative_credits": null,
+    "non_cumulative_resets_in": null,
+    "currency": {
+      "R$": {
+        "early_adopter": { "monthly": 3.0, "annual": 3.0 },
+        "late_adopter":  { "monthly": 5.0, "annual": 5.0 }
+      },
+      "$": {
+        "early_adopter": { "monthly": 1.0, "annual": 1.0 },
+        "late_adopter":  { "monthly": 2.0, "annual": 2.0 }
+      }
+    },
+    "features": {
+      "main_features": {},
+      "early_adopters_features": {}
+    }
+  }
+]

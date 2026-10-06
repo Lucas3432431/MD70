@@ -1,0 +1,6 @@
+{
+  "stage": "attachVariation",
+  "description": "Sem documentos — valida que o gateway permite geração de variação sem setup prévio (canvas/brand/product)",
+  "documents": [],
+  "isolated_messages": []
+}

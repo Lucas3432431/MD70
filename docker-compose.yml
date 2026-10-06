@@ -1,0 +1,306 @@
+services:
+  egress_proxy:
+    build:
+      context: ./egress_proxy
+      dockerfile: Dockerfile
+    image: localhost/md70-egress_proxy:latest
+    container_name: md70_egress_proxy_${APP_VERSION}
+    user: "1002:1002"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - PROXY_PORT=3128
+      - BLOCKED_HOSTS=backend,db,redis,gateway,sandbox,egress_proxy
+    networks:
+      - sandbox_egress
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "python3 /app/healthcheck.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  browser:
+    build:
+      context: ./browser
+      dockerfile: Dockerfile
+    image: localhost/md70-browser:latest
+    container_name: md70_browser_${APP_VERSION}
+    # pwuser = uid 1000 na imagem playwright
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - BROWSER_PORT=8102
+      - EGRESS_PROXY_URL=http://egress_proxy:3128
+    ports:
+      - ${BROWSER_EXPOSE_PORT:-}
+    # Chromium usa /tmp intensamente; 1G garante headless sem crash
+    tmpfs:
+      - /tmp:mode=1777,size=1G
+    networks:
+      - backend_net
+      - sandbox_egress
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+    depends_on:
+      egress_proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8102/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    image: localhost/md70-sandbox:latest
+    container_name: md70_sandbox_${APP_VERSION}
+    user: "1001:1001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - SANDBOX_PORT=8101
+      - EGRESS_PROXY_URL=http://egress_proxy:3128
+    ports:
+      - ${SANDBOX_EXPOSE_PORT:-}
+    # Removido volume do host para garantir isolamento real e evitar conflitos de permissão
+    tmpfs:
+      - /tmp:mode=1777,size=64M
+    networks:
+      - backend_net
+      - sandbox_egress
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    depends_on:
+      egress_proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - ENV=${ENV}
+        - HOT_RELOAD_ENABLED=${HOT_RELOAD_ENABLED}
+        - BACKEND_PORT=${BACKEND_PORT}
+    image: localhost/md70-backend:latest
+    container_name: md70_backend_${APP_VERSION}
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./backend/Data:/app/Data:rw
+      - ./backend/Media:/app/Media:rw
+      - ./secrets/app.secrets:/run/secrets/app.env:ro
+    environment:
+      - IS_CONTAINERED=true
+      - ENV=${ENV}
+      - ENVIRONMENT=${ENV}
+      - HOT_RELOAD_ENABLED=${HOT_RELOAD_ENABLED}
+      - BACKEND_PORT=${BACKEND_PORT}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_INTERNAL_PORT}
+      - SANDBOX_URL=http://sandbox:8101
+      - BROWSER_SERVICE_URL=http://browser:8102
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - LITESTREAM_ENABLED=${LITESTREAM_ENABLED:-false}
+      - VITE_HTTP_PROTOCOL=${VITE_HTTP_PROTOCOL}
+      - PUBLIC_URL=${PUBLIC_URL}
+    restart: unless-stopped
+    networks:
+      - backend_net
+      - data_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    depends_on:
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_healthy
+      browser:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      network: host
+      args:
+        - ENV=${ENV}
+        - HOT_RELOAD_ENABLED=${HOT_RELOAD_ENABLED}
+        - FRONTEND_PORT=${FRONTEND_PORT}
+    image: localhost/md70-frontend:latest
+    container_name: md70_frontend_${APP_VERSION}
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./secrets/app.secrets:/run/secrets/app.env:ro
+    tmpfs:
+      - /app/node_modules/.vite-temp:mode=1777,size=64M
+      - /app/node_modules/.vite:mode=1777,size=256M
+      - /tmp:mode=1777,size=128M
+    environment:
+      - IS_CONTAINERED=true
+      - ENV=${ENV}
+      - HOT_RELOAD_ENABLED=${HOT_RELOAD_ENABLED}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - VITE_HTTP_PROTOCOL=${VITE_HTTP_PROTOCOL}
+      - VITE_DOMAIN=${VITE_DOMAIN}
+      - FRONTEND_PORT=${FRONTEND_PORT}
+    networks:
+      - public_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 2G
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:${FRONTEND_PORT}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5m
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    image: localhost/md70-gateway:latest
+    container_name: md70_gateway_${APP_VERSION}
+    user: "nginx"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "0.0.0.0:${GATEWAY_HTTP_PORT}:${NGINX_PORT}"
+      - "0.0.0.0:${GATEWAY_HTTPS_PORT}:8543"
+    environment:
+      - FRONTEND_HOST=${GATEWAY_FRONTEND_HOST}
+      - FRONTEND_PORT=${FRONTEND_PORT}
+      - BACKEND_HOST=${GATEWAY_BACKEND_HOST}
+      - BACKEND_PORT=${BACKEND_PORT}
+      - WEB_HOST=${GATEWAY_WEB_HOST}
+      - WEB_PORT=${GATEWAY_WEB_PORT}
+      - MODSECURITY_ENABLED=on
+      - ANOMALY_INBOUND=${ANOMALY_INBOUND:-100}
+      - ANOMALY_OUTBOUND=${ANOMALY_OUTBOUND:-100}
+      - DOMAIN_NAME=${DOMAIN_NAME:-app.localhost}
+      - INSTITUTIONAL_DOMAIN_NAME=${INSTITUTIONAL_DOMAIN_NAME:-localhost}
+      - CARDAPIO_DOMAIN_NAME=${CARDAPIO_DOMAIN_NAME:-cardapio.localhost}
+      - DELIVERY_DOMAIN_NAME=${DELIVERY_DOMAIN_NAME:-delivery.localhost}
+      - LINKS_DOMAIN_NAME=${LINKS_DOMAIN_NAME:-links.localhost}
+      - NGINX_PORT=8181
+      - PUBLIC_URL=${PUBLIC_URL}
+      - ANALYTICS_HOST=${GATEWAY_ANALYTICS_HOST}
+      - ANALYTICS_PORT=${ANALYTICS_PORT}
+    networks:
+      - public_net
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    image: docker.io/library/redis:alpine
+    container_name: md70_redis_${APP_VERSION}
+    command: redis-server /run/secrets/redis.conf
+    user: "999"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./secrets/redis.conf:/run/secrets/redis.conf:ro
+      - redis_data:/data:rw
+    networks:
+      - data_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -qE 'PONG|NOAUTH'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ==================== VOLUMES DEFINITION ====================
+volumes:
+  redis_data:
+    name: md70-redis-data
+
+# ==================== NETWORKS DEFINITION ====================
+networks:
+  public_net:
+    driver: bridge
+    name: md70_public
+  backend_net:
+    driver: bridge
+    name: md70_backend
+  data_net:
+    driver: bridge
+    name: md70_data
+  sandbox_egress:
+    driver: bridge
+    name: md70_sandbox_egress

@@ -1,0 +1,18 @@
+# Override de produção — remove volume mounts de source code que ocultam
+# os node_modules e o código já buildados dentro das imagens.
+services:
+  frontend:
+    volumes:
+      - ./secrets/frontend.secrets:/run/secrets/app.env:ro
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+      - /app/node_modules/.vite-temp:mode=1777,size=64M
+      - /app/node_modules/.vite:mode=1777,size=256M
+
+  backend:
+    volumes:
+      - ./services/backend/Data:/app/Data:rw
+      - ./services/backend/Media:/app/Media:rw
+      - ./secrets/app.secrets:/run/secrets/app.env:ro
+    tmpfs:
+      - /tmp:size=256m,mode=1777
