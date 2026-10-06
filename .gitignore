@@ -39,3 +39,6 @@ dist-ssr
 secrets/
 *.secrets
 compose.env
+
+# Runtime data & logs — never commit
+backend/Data/.Logs/

@@ -1,6 +1,6 @@
 import { Link, useRouterState, useNavigate, Outlet } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutDashboard, Building2, LogOut, Wallet, BarChart3, ShoppingCart, Users } from "lucide-react";
 import { Logo } from "@/components/site/Logo";
 import { Button } from "@/components/ui/button";
@@ -23,26 +23,32 @@ type AdminContextValue = { data: AdminData; setData: React.Dispatch<React.SetSta
 const AdminContext = createContext<AdminContextValue | null>(null);
 export function useAdmin() { const value = useContext(AdminContext); if (!value) throw new Error("Admin context unavailable"); return value; }
 
+// AdminGate always renders AdminWorkspace so the context provider is always in
+// the tree — avoids "Admin context unavailable" when child routes render
+// before the async data resolves in concurrent React.
 export function AdminGate() {
   const { data, isPending, isError } = useAdminData();
-  if (isPending) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">Verificando acesso…</main>;
-  if (isError || !data) return <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-5 px-6 text-center"><Logo sub={false}/><h1 className="font-display text-4xl text-primary">Acesso restrito</h1><p className="text-sm text-muted-foreground">Esta área é exclusiva da equipe administrativa MD70.</p></main>;
-  return <AdminWorkspace initialData={data} />;
+  return <AdminWorkspace initialData={data ?? null} isPending={isPending} isError={isError} />;
 }
 
-function AdminWorkspace({ initialData }: { initialData: AdminData }) {
-  const [data, setData] = useState<AdminData>(initialData);
+function AdminWorkspace({ initialData, isPending, isError }: { initialData: AdminData | null; isPending: boolean; isError: boolean }) {
+  const [data, setData] = useState<AdminData | null>(initialData);
+  useEffect(() => { if (initialData) setData(initialData); }, [initialData]);
   const [panelOpen, setPanelOpen] = useState(false);
   const handlePanelChange = useCallback((open: boolean) => setPanelOpen(open), []);
-  const value = useMemo(() => ({ data, setData }), [data]);
+
+  const value = useMemo(
+    () => (data ? { data, setData: setData as React.Dispatch<React.SetStateAction<AdminData>> } : null),
+    [data],
+  );
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const badges = useMemo(() => ({
-    "/admin/crm": data.leads.filter(l => l.status === "Interesse").length,
-    "/admin/compras": data.purchases.filter(p => p.status === "Solicitado" || p.status === "Fornecedores Contatados").length,
-    "/admin/empreendimentos": data.projects.filter(p => p.status === "Oferecido / Interessado").length,
+    "/admin/crm": data?.leads.filter(l => l.status === "Interesse").length ?? 0,
+    "/admin/compras": data?.purchases.filter(p => p.status === "Solicitado" || p.status === "Fornecedores Contatados").length ?? 0,
+    "/admin/empreendimentos": data?.projects.filter(p => p.status === "Oferecido / Interessado").length ?? 0,
   }), [data]);
 
   async function signOut() {
@@ -57,6 +63,20 @@ function AdminWorkspace({ initialData }: { initialData: AdminData }) {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     window.dispatchEvent(new Event("md70:auth"));
     await navigate({ to: "/login", replace: true });
+  }
+
+  if (isPending) {
+    return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">Verificando acesso…</main>;
+  }
+
+  if (isError || !value) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-5 px-6 text-center">
+        <Logo sub={false} />
+        <h1 className="font-display text-4xl text-primary">Acesso restrito</h1>
+        <p className="text-sm text-muted-foreground">Esta área é exclusiva da equipe administrativa MD70.</p>
+      </main>
+    );
   }
 
   return (

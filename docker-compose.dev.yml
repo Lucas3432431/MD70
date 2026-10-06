@@ -17,11 +17,5 @@ services:
     tmpfs:
       - /app/node_modules/.vite-temp:mode=1777,size=64M
       - /app/node_modules/.vite:mode=1777,size=256M
+      - /app/.tanstack:mode=1777,size=64M
 
-  analytics:
-    volumes:
-      - ./analytics/src:/app/src:ro
-      - ./analytics/sdk.js.template:/app/sdk.js.template:ro
-      - ./analytics/schema.sql:/app/schema.sql:ro
-    environment:
-      - HOT_RELOAD_ENABLED=true
