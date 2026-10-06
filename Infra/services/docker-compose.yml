@@ -253,7 +253,8 @@ services:
           cpus: '0.5'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8181/nginx-health"]
+      # /nginx-health só existe no server do DOMAIN_NAME; sem o Host, "localhost" cai no server institucional (→ frontend 404)
+      test: ["CMD", "curl", "-sf", "-H", "Host: ${DOMAIN_NAME:-app.localhost}", "http://localhost:8181/nginx-health"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -69,6 +69,7 @@ Entrar na máquina: `podman machine ssh`
 | Logs do túnel | `podman logs -f md70_cloudflared` |
 | Reiniciar o túnel | `podman restart md70_cloudflared` |
 | Logs do gateway | `podman logs -f md70_gateway_v1.0` |
+| Religar tudo sem build | `bash ~/MD70/Infra/services/scripts/boot_prod.sh` |
 | Deploy / atualizar | ver abaixo |
 
 ### Deploy de uma nova versão
@@ -110,7 +111,13 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
 
 - **Sem limites de CPU e memória.** Na máquina do Podman sobre WSL, os controladores de cgroup não são delegados ao usuário rootless (o processo fica em `/non-systemd/...`), e qualquer `deploy.resources.limits` falha com `crun: open memory.max`. Por isso `~/.config/containers/containers.conf` tem `cgroups = "disabled"`: os containers sobem, mas **os limites do compose são ignorados**. Rodar com root (`sudo podman`) aplicaria os limites, mas o `start_prod.sh` usa `podman unshare`, que exige rootless.
 - **Por que não o serviço do Windows?** O `cloudflared service install` no Windows foi testado e descartado. Com `--config` no `ImagePath`, o serviço encerra com `flag provided but not defined: -config`. Sem argumentos, lendo `systemprofile\.cloudflared\config.yml`, cai em loop sem logar o motivo. Rodar o conector como container junto do MD70 evita isso e não exige administrador.
-- **Reboot do Windows.** A máquina do Podman não sobe sozinha. Depois de reiniciar, é preciso rodar `podman machine start`. O `md70_cloudflared` tem `--restart unless-stopped`, mas a maioria dos serviços do compose não tem restart policy.
+- **Reboot do Windows.** A tarefa agendada **"MD70 Boot"** (no logon do usuário, com 30s de atraso) roda [`boot_windows.ps1`](boot_windows.ps1). Ele liga a máquina do Podman, se precisar, e chama `Infra/services/scripts/boot_prod.sh`, que religa o túnel e os containers já criados, na ordem dos `depends_on` e esperando cada um ficar healthy. Não faz build. O log fica em `%LOCALAPPDATA%\md70-boot.log`. Como a máquina do Podman pertence ao usuário, **o MD70 só volta depois que alguém entra no Windows**: configure o login automático se o PC precisar se recuperar sozinho. Para recriar a tarefa:
+  ```powershell
+  $s = "$env:USERPROFILE\Trabalho\MD70\Infra\TrafficTuneling\boot_windows.ps1"
+  $a = New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$s`""
+  $t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"; $t.Delay = 'PT30S'
+  Register-ScheduledTask -TaskName 'MD70 Boot' -Action $a -Trigger $t -Force
+  ```
 
 - **Frontend self-hosted.** O `@lovable.dev/vite-tanstack-config` faz o build com o nitro no preset `cloudflare-module` (bundle de Worker), que não roda aqui. O `frontend/entrypoint.sh` de produção exporta `NITRO_PRESET=bun` e serve `.output/server/index.mjs`. Como o build roda no start do container, o frontend de prod não usa `read_only`.
 
