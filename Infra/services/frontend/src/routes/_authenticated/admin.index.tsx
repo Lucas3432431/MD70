@@ -24,7 +24,7 @@ function AdminHome() {
 
   const patrimonioSobGestao = sum(
     data.movements
-      .filter((m) => m.status === "Realizado")
+      .filter((m) => m.status === "Realizado" && m.category === "Capital")
       .map((m) => m.direction === "Entrada" ? m.value : -m.value),
   );
 
@@ -45,7 +45,7 @@ function AdminHome() {
         <div className="bg-primary p-7 text-primary-foreground">
           <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio sob gestão</p>
           <p className="num mt-4 font-display text-4xl md:text-5xl">{brlShort(patrimonioSobGestao)}</p>
-          <p className="mt-3 text-sm opacity-70">Saldo líquido de movimentações realizadas</p>
+          <p className="mt-3 text-sm opacity-70">Aportes menos resgates realizados</p>
         </div>
         <div className="bg-card p-7">
           <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Faturamento {currentYear}</p>
