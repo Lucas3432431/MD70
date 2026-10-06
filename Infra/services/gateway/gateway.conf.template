@@ -81,8 +81,6 @@ server {
 
     set $web_upstream ${WEB_HOST}:${WEB_PORT};
     set $backend_upstream ${BACKEND_HOST}:${BACKEND_PORT};
-    set $analytics_upstream ${ANALYTICS_HOST}:${ANALYTICS_PORT};
-
     server_tokens off;
     more_clear_headers Server;
     more_clear_headers X-Powered-By;
@@ -437,59 +435,6 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    # ── SDK Analytics ─────────────────────────────────────────────────────────
-    # CORS aberto com credentials: SDK é embarcado em sites de clientes (qualquer
-    # origin). Autenticação feita por sdk_key no payload, não por origin.
-
-    location = /sdk.js {
-        modsecurity_rules 'SecRuleEngine Off';
-        add_header Access-Control-Allow-Origin      $http_origin always;
-        add_header Access-Control-Allow-Credentials "true" always;
-        add_header Vary                             "Origin" always;
-        add_header Cache-Control "public, max-age=300" always;
-        proxy_pass http://$analytics_upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_http_version 1.1;
-        proxy_buffering off;
-    }
-
-    location = /sdk/health {
-        modsecurity_rules 'SecRuleEngine Off';
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Cache-Control "no-store" always;
-        proxy_pass http://$analytics_upstream/sdk/health;
-        proxy_set_header Host $host;
-        proxy_http_version 1.1;
-        proxy_buffering off;
-    }
-
-    location ^~ /track/ {
-        modsecurity_rules 'SecRuleEngine Off';
-        limit_req zone=webhook burst=200 nodelay;
-        if ($request_method = OPTIONS) {
-            add_header Access-Control-Allow-Origin      $http_origin always;
-            add_header Access-Control-Allow-Credentials "true" always;
-            add_header Access-Control-Allow-Methods "POST, GET, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Content-Type" always;
-            add_header Access-Control-Max-Age 86400 always;
-            add_header Vary "Origin" always;
-            return 204;
-        }
-        add_header Access-Control-Allow-Origin      $http_origin always;
-        add_header Access-Control-Allow-Credentials "true" always;
-        add_header Vary                             "Origin" always;
-        add_header Cache-Control "no-store" always;
-        proxy_pass http://$analytics_upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_http_version 1.1;
-        proxy_buffering off;
-        proxy_request_buffering off;
-    }
-
     location ^~ /api/portal-admin/ {
         limit_req zone=api_read burst=200 nodelay;
         limit_req zone=api_write burst=30 nodelay;
@@ -829,6 +774,12 @@ server {
 
     set $cors_methods "GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS";
     set $cors_headers "Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Dev-Bypass-Key, X-Fingerprint-ID, ngrok-skip-browser-warning, Accept";
+
+    location /nginx-health {
+        limit_req zone=health burst=5 nodelay;
+        access_log off;
+        return 200 "healthy\n";
+    }
 
     location ^~ /api/auth {
         limit_req zone=auth burst=10 nodelay;

@@ -41,7 +41,7 @@ services:
     cap_drop:
       - ALL
     environment:
-      - BROWSER_PORT=8102
+      - BROWSER_PORT=8002
       - EGRESS_PROXY_URL=http://egress_proxy:3128
     ports:
       - ${BROWSER_EXPOSE_PORT:-}
@@ -60,7 +60,7 @@ services:
       egress_proxy:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8102/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -79,7 +79,7 @@ services:
     cap_drop:
       - ALL
     environment:
-      - SANDBOX_PORT=8101
+      - SANDBOX_PORT=8001
       - EGRESS_PROXY_URL=http://egress_proxy:3128
     ports:
       - ${SANDBOX_EXPOSE_PORT:-}
@@ -98,7 +98,7 @@ services:
       egress_proxy:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -132,8 +132,8 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - REDIS_HOST=redis
       - REDIS_PORT=${REDIS_INTERNAL_PORT}
-      - SANDBOX_URL=http://sandbox:8101
-      - BROWSER_SERVICE_URL=http://browser:8102
+      - SANDBOX_URL=http://sandbox:8001
+      - BROWSER_SERVICE_URL=http://browser:8002
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - LITESTREAM_ENABLED=${LITESTREAM_ENABLED:-false}
@@ -225,7 +225,7 @@ services:
       - ALL
     ports:
       - "0.0.0.0:${GATEWAY_HTTP_PORT}:${NGINX_PORT}"
-      - "0.0.0.0:${GATEWAY_HTTPS_PORT}:8543"
+      - "0.0.0.0:${GATEWAY_HTTPS_PORT}:${GATEWAY_HTTPS_PORT}"
     environment:
       - FRONTEND_HOST=${GATEWAY_FRONTEND_HOST}
       - FRONTEND_PORT=${FRONTEND_PORT}
@@ -243,7 +243,7 @@ services:
       - CARDAPIO_DOMAIN_NAME=${CARDAPIO_DOMAIN_NAME:-cardapio.localhost}
       - DELIVERY_DOMAIN_NAME=${DELIVERY_DOMAIN_NAME:-delivery.localhost}
       - LINKS_DOMAIN_NAME=${LINKS_DOMAIN_NAME:-links.localhost}
-      - NGINX_PORT=8181
+      - NGINX_PORT=${NGINX_PORT}
       - PUBLIC_URL=${PUBLIC_URL}
     networks:
       - public_net
@@ -255,7 +255,7 @@ services:
           memory: 256M
     healthcheck:
       # /nginx-health só existe no server do DOMAIN_NAME; sem o Host, "localhost" cai no server institucional (→ frontend 404)
-      test: ["CMD", "curl", "-sf", "-H", "Host: ${DOMAIN_NAME:-app.localhost}", "http://localhost:8181/nginx-health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:${NGINX_PORT:-8181}/nginx-health"]
       interval: 10s
       timeout: 5s
       retries: 3

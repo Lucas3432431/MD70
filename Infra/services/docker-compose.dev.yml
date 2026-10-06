@@ -19,3 +19,7 @@ services:
       - /app/node_modules/.vite:mode=1777,size=256M
       - /app/.tanstack:mode=1777,size=64M
       - /tmp:mode=1777,size=128M
+
+  gateway:
+    environment:
+      - WEB_PORT=5182
