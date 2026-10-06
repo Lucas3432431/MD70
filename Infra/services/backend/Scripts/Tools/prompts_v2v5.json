@@ -1,0 +1,18 @@
+[
+  {
+    "label": "v2-mulher-loira",
+    "prompt": "Generate a professional photorealistic variation of this image. PRESERVE EXACTLY — do NOT change under any circumstances: camera angle, focal distance, depth of field, framing and composition, lighting setup, background environment (artisanal café), props (tablet, apron, shelves with plants), clothing style and color palette, overall mood and color grading, image quality and resolution. REPLACE ONLY the model/person with: a young blonde woman (22–26 years old, loose blonde hair, casual white t-shirt or light blouse), smiling confidently, holding the tablet in the same pose and hand position as the original. Same apparent age energy and natural expression. Result must look like a professional editorial photograph with extreme photographic realism."
+  },
+  {
+    "label": "v3-ecommerce-home",
+    "prompt": "Generate a professional photorealistic variation of this image. PRESERVE the same person (same model, same pose, same clothing, same expression), the same tablet in hand, the same lighting quality and color grading, and the same overall composition structure. CHANGE ONLY the background environment: replace the artisanal café with a modern home office or living room setting, with visible e-commerce delivery boxes (cardboard boxes with tape) naturally placed in the background or foreground. The new environment should feel warm, modern, and domestic — hardwood floor or light rug, clean white walls, a desk or shelves visible. The result must look like a professional lifestyle photograph for a digital marketing product."
+  },
+  {
+    "label": "v4-neutro-sem-verde",
+    "prompt": "Generate a professional advertising image based on this reference. PRESERVE the overall composition, person, pose, tablet, background environment, and lighting structure. APPLY these design changes: (1) Remove the green text block/balloon on the left side entirely, filling the area seamlessly with the background — no ghosting, no empty patches; (2) Improve visual hierarchy: allow the person and tablet to be the clear focal point with no competing graphic elements; (3) Make the CTA more prominent by shifting to a neutral color — deep navy (#1e3a5f) or warm charcoal (#2d2d2d) instead of green; (4) Shift the overall color palette to neutral tones: cool whites, grays, and muted blues — remove all green from the image. Result must be photorealistic, professional advertising standard, clean and modern feel."
+  },
+  {
+    "label": "v5-dor-objecao",
+    "prompt": "Generate a professional advertising image based on this reference. PRESERVE the overall composition, person, pose, background environment, and lighting. REPLACE all visible text content with new copy in Brazilian Portuguese: Main headline (bold, large): 'Economize 12h por semana no seu marketing' — positioned prominently on the left side where the original text block is; Sub-headline (smaller): 'Seu assistente digital cria, publica e envia relatórios — você só aprova'; CTA button text: 'Comece gratuitamente'. KEEP the same text block visual style (green background with white text or adapt to match the original design language). All text must be perfectly legible, crisp, and anti-aliased. Result must be photorealistic, professional advertising standard, print-quality."
+  }
+]

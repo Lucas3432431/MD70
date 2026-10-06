@@ -1,0 +1,123 @@
+{
+  "steps": [
+    {
+      "number": 1,
+      "name": "PESQUISA_DO_ANUNCIANTE",
+      "filename": "Briefing_[EMPRESA].md",
+      "objective": "Entender a empresa, sua maturidade digital, empresarial e identidade visual",
+      "instructions": "1. Use scraping(search=\"[NOME_DA_EMPRESA]\") para pesquisar no Google\n   - Analise: presença digital, redes sociais, avaliações, notícias\n   - Indique maturidade: Recente/Média/Madura\n\n2. Use scraping(url=\"[URL_EXTRAIDA]\") para acessar website\n   - Extrai automaticamente: conteúdo, 3 cores do logo, URL favicon\n   - Crítico: Capture as cores (primária/secundária/terciária) e URL favicon\n\n3. Estruture análise:\n   - Maturidade digital e tamanho\n   - Presença digital (redes, site, SEO)\n   - Reputação (avaliações, sentimento)\n   - Identidade Visual: URL favicon + 3 cores com HEX\n   - Serviços/diferenciais competitivos"
+    },
+    {
+      "number": 2,
+      "name": "PESQUISA_DO_MERCADO",
+      "filename": "AnaliseMercado_[EMPRESA].md",
+      "objective": "Entender mercado, nicho, concorrência e oportunidades",
+      "instructions": "1. Use scraping(search=\"[TIPO_NEGÓCIO] + [LOCALIZAÇÃO]\") para pesquisar o nicho\n   - Exemplo: scraping(search=\"Imóveis em Rio Claro - SP\")\n   - Analise: competidores, líderes, tamanho do mercado\n\n2. Use scraping(search=\"[TIPO_NEGÓCIO] + tendências 2025\") para tendências\n   - Identifique: inovações, gaps, problemas que enfrentam\n\n3. Estruture análise:\n   - Quantidade de competidores e tamanho do mercado\n   - Quem são os líderes (presença, reputação)\n   - Tendências emergentes\n   - Oportunidades de diferenciação para cliente"
+    },
+    {
+      "number": 3,
+      "name": "PESQUISA_CALENDARIO_ANUAL",
+      "filename": "CalendarioAnual_[EMPRESA].md",
+      "objective": "Mapear eventos anuais para otimizar timing de campanhas e budget",
+      "instructions": "Pesquise e estruture o calendário anual visando grandes eventos para planejamento estratégico:\n   \n   1. Identifique principais eventos/datas do ano:\n      - Use scraping(search=\"[TIPO_NEGÓCIO] + datas importantes + [PAÍS]\") para eventos relevantes do setor\n      - Identifique: Black Friday, dias temáticos, datas sazonais, eventos da indústria\n      - Exemplo: Para imobiliário -> início do semestre universitário, períodos de férias, mudança de estação\n\n   2. Pesquise períodos de preços inflacionados:\n      - Use scraping(search=\"[TIPO_NEGÓCIO] + preço de anúncio + [MÊS]\") para entender variações de CPC/CPM\n      - Identifique: quando competidores gastam mais, períodos de maior concorrência por ads\n      - Detecte: Black Friday (custos altos), períodos de férias (custos baixos), volta ao trabalho (custos médios)\n\n   3. Cruze comportamento de busca com sazonalidade:\n      - Use scraping(search=\"[TIPO_NEGÓCIO] + comportamento de busca + por mês\") para picos de interesse\n      - Mapeie: quando o público mais procura/compra, quando deixa de procurar\n      - Identifique gaps: momentos com demanda alta mas menos competição\n\n   4. Estruture análise:\n      - Calendário por mês com eventos principais e sazonalidade\n      - Períodos de CPC/CPM alto vs baixo (quando NÃO gastar budget)\n      - Janelas de oportunidade (alta demanda + baixa concorrência)\n      - Períodos a evitar (custo alto, retorno baixo)\n      - Timing recomendado para lançamentos/promoções\n\n   ⚠️ OBRIGATÓRIO: Este documento deve estar completo antes de prosseguir para etapa 4, pois determina contexto de pesquisa posterior"
+    },
+    {
+      "number": 4,
+      "name": "PESQUISA_DE_TRENDS_E_SECTOR",
+      "filename": "TrendsESetor_[EMPRESA].md",
+      "objective": "Pesquisar probable ICPs, funil de vendas do setor e campanhas referência",
+      "instructions": "1. Pesquise prováveis ICPs baseado no padrão do setor:\n   - Use scraping(search=\"[TIPO_NEGÓCIO] + ICP + comportamento\") para entender perfil típico\n   - Identifique: interesses principais, dores comuns, ambições do segmento\n   - Exemplo: Para imobiliário -> \"casais jovens 25-35 anos buscam primeiro imóvel\"\n\n2. Pesquise como funciona o funil médio do setor:\n   - Use scraping(search=\"[TIPO_NEGÓCIO] + funil vendas + jornada cliente\") para entender etapas\n   - Mapeie: tempo médio de decisão, touchpoints principais, taxa de conversão esperada\n   - Identifique: qual etapa do funil tem maior dificuldade de conversão\n\n3. Pesquise campanhas de empresas referência do setor:\n   - Use scraping(search=\"[TIPO_NEGÓCIO] + melhores campanhas + [País: Brasil/EUA/Mundo]\")\n   - Analise redes sociais de 3-5 competitors líderes do setor\n   - Identifique: estratégias visuais, tone of voice, tipo de conteúdo que funciona\n   - Especialmente campanhas de topo de funil (awareness) que geram maior engajamento\n\n4. Estruture análise:\n   - Probable ICPs do setor: principais características, interesses e dores\n   - Funil tipo: etapas, tempo médio, pontos críticos\n   - Campanhas referência: estratégias visuais, copy patterns, canais prioritários"
+    },
+    {
+      "number": 5,
+      "name": "ICPS_DO_ANUNCIANTE",
+      "filename": "PersonasIdeais_[EMPRESA].md",
+      "objective": "Perfis de clientes ideais e segmentação, refinados com insights do setor",
+      "instructions": "Crie 2-3 ICPs (Ideal Customer Profile) baseado em pesquisa do setor + empresa:\n   Para cada ICP:\n   - Nome/persona (ex: \"Casal jovem em busca do primeiro imóvel\")\n   - Dados demográficos (idade, renda, localização)\n   - Dados psicográficos (valores, estilo de vida, motivações)\n   - Dores principais (problemas que enfrentam)\n   - Desejos (o que buscam)\n   - Comportamento online (onde navegam, redes sociais, tipo de conteúdo que consome)\n   - Como este ICP encontra soluções hoje\n   - Interesses e ambições específicas deste segmento (baseado em pesquisa de setor)"
+    },
+    {
+      "number": 6,
+      "name": "BRIEFING_DO_BUSINESS",
+      "filename": "BriefingBusiness_[EMPRESA].md",
+      "objective": "Resumo executivo da empresa e contexto de negócio",
+      "instructions": "Baseado nas pesquisas (etapas 1-4), estruture:\n   - Resumo executivo (1-2 parágrafos)\n   - Contexto de negócio e história\n   - Objetivos principais\n   - Restrições e oportunidades identificadas\n   - Posicionamento relativo ao mercado"
+    },
+    {
+      "number": 7,
+      "name": "BRIEFING_DE_PRODUTO",
+      "filename": "BriefingProduto_[EMPRESA].md",
+      "objective": "Descrição completa das ofertas e diferenciais",
+      "instructions": "Estruture para cada produto/serviço principal:\n   - Descrição clara\n   - Features principais (características técnicas)\n   - Benefits (o que resolve para cliente)\n   - Diferenciais competitivos\n   - Casos de uso/aplicações\n   - Comparação com concorrentes (quando relevante)"
+    },
+    {
+      "number": 8,
+      "name": "JORNADA_DO_CLIENTE",
+      "filename": "JornadaCliente_[EMPRESA].md",
+      "objective": "Mapear touchpoints e stages da compra com detalhes do funil",
+      "instructions": "Para cada ICP, mapeie a jornada:\n   Stages (use AACD):\n   - Awareness (descoberta): Como conhecem a marca?\n   - Consideration (consideração): Como comparam?\n   - Conversion (decisão): O que convence?\n   - Advocacy (recomendação): Como viram clientes felizes?\n   \n   Para cada stage:\n   - Principais touchpoints\n   - Dor/dúvida principal que existe nesta etapa\n   - Tipo de conteúdo necessário (storytelling para awareness, autoridade para consideration, etc)\n   - Canais mais eficazes"
+    },
+    {
+      "number": 9,
+      "name": "CALENDARIO_EDITORIAL",
+      "filename": "CalendarioEditorial_[EMPRESA].md",
+      "objective": "Planejamento de conteúdo por 3 meses",
+      "instructions": "Crie calendário por semanas (12 semanas):\n   Para cada semana:\n   - Tema/tópico principal\n   - Tipo de conteúdo (vídeo, imagem, post, story)\n   - Objetivos (awareness/consideration/conversion)\n   - Canais (Instagram, TikTok, Google Ads)\n   - Data publicação\n   - CTA esperado"
+    },
+    {
+      "number": 10,
+      "name": "PESQUISA_DE_CONTEUDOS",
+      "filename": "PesquisaConteudo_[EMPRESA].md",
+      "objective": "Identificar formatos, temas e estratégias visuais que funcionam",
+      "instructions": "Pesquise o que funciona no mercado para este nicho:\n   \n   1. Analise campanhas de referência do setor:\n      - Que tipo de post tem mais engajamento?\n      - Padrões de sucesso em cada etapa do funil:\n        * TOPO (Awareness): storytelling com temas que englobam interesses do ICP, foco em conexão emocional\n        * MEIO (Consideration): conteúdo de autoridade, expert tips, comparações, educativo\n        * FUNDO (Conversion): identificação de dor + clareza da solução + detalhes do produto, urgência/scarcity\n\n   2. Identifique padrões:\n      - Formatos mais eficazes (vídeo curto, carrossel, reel)\n      - Temas que geram mais engajamento\n      - Horários de melhor performance\n      - Tipo de copy (humor, urgência, educativo)\n      - Características visuais de campanhas vencedoras\n\n   3. Recomendações para este negócio específico:\n      - Qual etapa do funil terá prioridade na campanha\n      - Formato recomendado (vídeo ou imagem)\n      - Tom e estilo que funciona para estes ICPs\n      - Elementos visuais que devem estar presentes\n\n   4. Pesquise referências visuais do mercado:\n      - Analise redes sociais de 3-5 empresas referência do setor\n      - Para cada empresa referência, identifique:\n        * Estratégias visuais predominantes (cores, composição, tipo de mídia)\n        * Padrões de copy usados (headlines, hooks, CTAs)\n        * Segmentação (qual etapa do funil, qual audience)\n      - Procure por:\n        * Campanhas que estão em produção há mais tempo (sinal de ROI positivo)\n        * Múltiplas variações do mesmo anúncio (sinal de testes bem-sucedidos)\n        * Padrões que se repetem entre concorrentes (best practices)\n      - Documente: qual empresa referência fez algo melhor, em que contexto, com qual resultado esperado"
+    },
+    {
+      "number": 11,
+      "name": "COPY_DO_PRIMEIRO_AD",
+      "filename": "PrimeiroAncio_[EMPRESA].md",
+      "objective": "Escrever primeiro anúncio e especificar mídia por etapa do funil",
+      "instructions": "PARTE 1 - COPY (ABORDAGEM ITERATIVA POR ETAPA):\nSequência de testes progressivos:\n\n   **Etapa 1 - Gancho Visual:**\n   - Crie 1 copy otimizado (fixo)\n   - Variação será APENAS no gancho visual (A/B em vídeo/imagem)\n\n   **Etapa 2 - Gancho Verbal/Sonoro (após gancho visual validado):**\n   - Mantenha copy e gancho visual fixo\n   - Teste 2 versões: voiceover/áudio diferente OU headline verbal diferente\n\n   **Etapa 3 - Narrativa pro Contexto (após gancho verbal validado):**\n   - Crie 2 copies com narrativas/contextos diferentes\n   - Mantenha gancho visual e sonoro fixo\n   - Teste qual contexto/história funciona melhor\n\n   **Etapa 4 - CTA (após narrativa validada):**\n   - Mantenha copy, gancho visual e sonoro fixo\n   - Teste 2 CTAs diferentes (frase, urgência, tipo de ação)\n\n   **Para cada copy:**\n   - Headline (3-5 palavras que capturam atenção)\n   - Hook (primeira linha que detém)\n   - Body copy (benefícios, não features)\n   - Prova social (se houver: avaliações, casos)\n   - CTA (Call-to-action claro: Conheça agora, Reserve seu, etc)\n   \n   Considere:\n   - Dores do ICP\n   - Diferenciais da marca\n   - Tom de voz apropriado\n\nPARTE 2 - ESPECIFICAÇÕES DE MÍDIA POR ETAPA DO FUNIL:\nDefina as características essenciais que TODA mídia deve ter dependendo da etapa:\n\n   TOPO DO FUNIL (Awareness):\n   - Mídias com ROSTOS (preferência: mulheres)\n   - Luminosidade: ótima (sol/dia)\n   - Cores vivas: Azul natural (céu, mar, rio, lago) e Verde (plantas)\n   - Objetivo: maior retenção visual\n   - Se negócio local sem boa imagem do local: usar temas de fundo (parques urbanos, ambientes agradáveis)\n\n   MEIO DO FUNIL (Consideration):\n   - Foco em autoridade e credibilidade visual\n   - Qualidade técnica alta (sem imperfeições óbvias)\n   - Mídias que demonstram expertise\n\n   FUNDO DO FUNIL (Conversion):\n   - Clareza do produto/serviço\n   - Visuais que identificam a dor e apresentam a solução\n   - Mídias com chamadas claras para ação\n\n   PROBLEMAS A EVITAR (TODAS as etapas):\n   - Falta de imperfeição natural da pele (parecer artificial/filtrado demais)\n   - Glitch de movimentos dos personagens (em vídeos)\n   - Camera instável ou shakiness visual\n   - Cores desbotadas ou luminosidade fraca\n\n   Para negócios locais:\n   - Se não houver imagem boa da fachada/interna: usar temas de fundo (parques urbanos, ambientes agradáveis)\n   - Não deixar vazio visual - sempre ter composição interessante\n\nPARTE 3 - DETALHES PARA INSTRUIR A IA:\nEspecifique informações fundamentais que serão essenciais para prompts de qualidade:\n\n   **PARA IMAGENS:**\n   - Estilo visual exato (fotografia realista, ilustração, 3D, etc)\n   - Composição: rule of thirds, focal point, elemento de destaque\n   - Paleta de cores precisa com NOME + HEX (ex: \"Azul Céu #87ceeb, Verde Floresta #2d5016, Branco Puro #ffffff\")\n   - Lighting: \"iluminação natural forte de dia\", \"luz dourada fim de tarde\", etc\n   - Personagens/elementos: descrição detalhada (tipo de roupa, expressão, pose)\n   - Fundo: descrição específica do ambiente\n   - Proporção: 1:1 (Instagram/Facebook) ou 4:5 (Feed mobile)\n   - Referência visual: usar URL favicon como base de estilo\n\n   **PARA VÍDEOS:**\n   - Duração total: máximo 8 segundos (Meta/TikTok standard)\n   - Breakdown por timing:\n     * Entrada (2s): descrição do gancho visual inicial\n     * Principal (5s): descrição do corpo/mensagem\n     * Saída (1s): descrição do CTA + branding\n   - Estilo visual: fotografia, animação, motion graphics, etc\n   - Movimento/transições: efeitos principais descritos\n   - Cores: paleta completa com NOME + HEX (ex: \"Azul Céu #87ceeb, Verde Floresta #2d5016\")\n   - Lighting: \"luz natural forte de dia\", \"interior bem iluminado\", etc\n   - Áudio: música (estilo/tom), voiceover (sim/não, tipo voz), efeitos sonoros\n   - Texto on-screen: quando aparece, tamanho, cor (por nome + HEX)\n   - Referência visual: URL favicon como base de estilo\n\n   **GERAL (AMBOS):**\n   - Evitar problemas conhecidos:\n     * NÃO: pele com filtro excessivo (falta imperfeição natural)\n     * NÃO: movimentos com glitch ou instabilidade\n     * NÃO: câmera tremida\n   - Tone: profissional, acessível, amigável, etc (conforme ICP)\n   - Cenário: indoor/outdoor/híbrido\n   - Presença de marca: qual intensidade de branding (sutil vs forte)"
+    },
+    {
+      "number": 12,
+      "name": "PLANEJAMENTO_CRIATIVO_FORMATO",
+      "filename": "EstrategiaVisual_[EMPRESA].md",
+      "objective": "Decidir formato visual (vídeo ou imagem) e planejar A/B testing estratégico",
+      "instructions": "Escolha entre VÍDEO ou IMAGEM baseado em:\n   - Nicho e audience (TikTok prefere vídeo, LinkedIn foto)\n   - Copy length (muito texto = imagem/carrossel)\n   - Budget (vídeo geralmente mais caro)\n   - Performance histórica do mercado\n   \n   **PLANEJAMENTO A/B DESDE O INÍCIO:**\n   Você vai gerar 2 criativos (A/B) para teste. A hipótese é ÚNICA, focando em UMA variável:\n   \n   **Se IMAGEM:**\n   - Criativo A: fundo/composição 1\n   - Criativo B: fundo/composição 2 (DIFERENTE)\n   - Copy: IDÊNTICO em ambos\n   - Resto (layout, cores primárias, elementos, tipografia): IDÊNTICO\n   - Hipótese: qual background/composição gera mais atenção inicial?\n   \n   **Se VÍDEO:**\n   - Criativo A: GANCHO VISUAL 1 nos primeiros 2 segundos (o que chama atenção)\n   - Criativo B: GANCHO VISUAL 2 DIFERENTE nos primeiros 2 segundos\n   - Corpo do vídeo (5s): IDÊNTICO em ambos\n   - Saída/CTA (1s): IDÊNTICO em ambos\n   - Áudio: IDÊNTICO em ambos (mesma música/voiceover)\n   - Cores/estilo: IDÊNTICO em ambos\n   - Hipótese: qual gancho visual gera mais retenção inicial?\n   \n   **A/B Testing com mesma copy, apenas diferença de gancho visual:**\n   - Mesma copy para ambos\n   - Mesmo tudo (composição, cores, áudio)\n   - APENAS diferença de gancho visual (como inicia o vídeo, sequência igual) ou fundo da foto/composição diferentes com texto igual\n   \n   **Se IMAGEM para compor VÍDEO:**\n   - A imagem deve ter MESMA COMPOSIÇÃO da imagem principal que aparece no vídeo\n   - Se vídeo tem \"fachada azul\", imagem deve ser \"fachada azul\" também\n   - Não gere ativos completamente diferentes\n   \n   Justifique:\n   - Por que este formato para estes ICPs\n   - Qual será exatamente a variação entre A e B\n   - Qual é a hipótese de teste (quantificável)"
+    },
+    {
+      "number": 13,
+      "name": "PLANEJAMENTO_CRIATIVO_VIDEO",
+      "filename": "PlanoVideo_[EMPRESA].md",
+      "objective": "Detalhar estrutura de vídeo com A/B testing",
+      "instructions": "Se selecionado VÍDEO, estruture 2 versões (A/B):\n   \n   **ESTRUTURA COMUM (ambas):**\n   - Duração: 8 segundos máximo (Meta/TikTok)\n   - Entrada (2s): gancho inicial\n   - Principal (5s): mensagem/benefício principal\n   - Saída (1s): CTA + branding\n   \n   **CRIATIVO A (Versão Padrão):**\n   - Gancho principal: [descrição]\n   - Fundo/movimento: [descrição]\n   \n   **CRIATIVO B (Teste de Gancho Visual):**\n   - Gancho alternativo: [descrição diferente de A]\n   - Fundo/movimento: pode manter similar a A\n   - Hipótese: testar qual ganho gera mais retenção\n   \n   **PARA AMBOS especifique:**\n   - Cores: usar paleta extraída com NOME + HEX (ex: \"Azul Céu #87ceeb, Verde Floresta #2d5016\")\n   - Referência: usar URL favicon como base\n   - Efeitos/transições principais\n   - Texto on-screen (quando usar) com cor especificada por nome + HEX\n   - Áudio (música, voiceover, som ambiente)\n   - Tipo de personagem: mulher, diverso, etc\n   - Iluminação: sol/dia ou tipo específico\n   - Evitar: glitch, câmera instável, pele artificial"
+    },
+    {
+      "number": 14,
+      "name": "PLANEJAMENTO_CRIATIVO_IMAGEM",
+      "filename": "PlanoImagem_[EMPRESA].md",
+      "objective": "Detalhar estrutura visual com A/B testing",
+      "instructions": "Se selecionado IMAGEM, estruture 2 versões (A/B):\n   \n   **ESTRUTURA COMUM (ambas):**\n   - Tipo: foto, graphic design, carrossel (3-5 slides)\n   - Proporções: 1:1 (Instagram/Facebook), 4:5 (Feed mobile)\n   - Composição visual (rule of thirds, focal point)\n   - Hierarquia de elementos (o que olho vê primeiro?)\n   \n   **CRIATIVO A (Versão Padrão):**\n   - Fundo/conteúdo principal: [descrição]\n   - Tema visual: [descrição]\n   \n   **CRIATIVO B (Teste de Fundo):**\n   - Fundo/conteúdo principal: [descrição diferente de A]\n   - Tema visual: pode manter similar em composição/cores\n   - Hipótese: testar qual background/conteúdo gera mais atenção\n   \n   **PARA AMBOS especifique:**\n   - Paleta de cores: NOME + HEX para primária (destaque), secundária e terciária (harmonia)\n     Exemplo: \"Azul Céu #87ceeb (primária), Verde Floresta #2d5016 (secundária), Branco Puro #ffffff (terciária)\"\n   - Referência visual: usar URL favicon para estilo\n   - Tipografia: fonte primária (headline) e secundária (body)\n   - Espaço em branco (não preencha tudo)\n   - Elementos visuais (ícones, formas, padrões)\n   - Tipo de personagem (se houver): mulher, idade aproximada, expressão\n   - Iluminação: natural strong de dia ou tipo específico\n   - Evitar: pele com filtro excessivo, composição desbotada"
+    },
+    {
+      "number": 15,
+      "name": "GERAR_ASSETS_VISUAIS",
+      "filename": "AssetsVisuais_[EMPRESA].md",
+      "objective": "Gerar criativos A/B com mediaai()",
+      "instructions": "Use mediaai() para gerar criativos A/B. A DIFERENÇA é APENAS no elemento de teste (gancho visual ou fundo):\n   \n   Formato: mediaai(type=\"image\"|\"video\", prompt=\"[DESCRIÇÃO_DETALHADA]\", reference_image=\"[URL_FAVICON]\")\n   \n   **SE IMAGEM:**\n   Criativo A - Prompt: [composição detalhada com FUNDO 1 e cores especificadas com NOME + HEX]\n   Criativo B - Prompt: [composição IDÊNTICA com FUNDO 2 DIFERENTE, mesmas cores]\n   \n   Exemplo:\n   A: \"Mulher sorridente com luminosidade natural de dia, fundo: parque urbano verde com plantas, roupa: azul clara (Azul Céu #87ceeb), composição rule of thirds, paisagem com Verde Floresta #2d5016\"\n   B: \"Mulher sorridente com luminosidade natural de dia, fundo: interior moderno com paredes brancas, roupa: azul clara (Azul Céu #87ceeb), composição rule of thirds\"\n   (resto idêntico: estilo, cores primárias NOME + HEX, composição)\n   \n   **SE VÍDEO:**\n   Criativo A - Prompt: [GANCHO VISUAL 1 específico para 2s iniciais] + [corpo + saída com todas as cores NOME + HEX/áudio/elementos]\n   Criativo B - Prompt: [GANCHO VISUAL 2 DIFERENTE para 2s iniciais] + [corpo + saída IDÊNTICO a A]\n   \n   O gancho visual é o diferencial. Exemplo:\n   A: \"Primeiros 2s: close-up de mulher abrindo caixa com surpresa feliz. Depois corpo: revelação de produto. Saída: CTA com marca. Música: upbeat. Cores: Vermelho Tomate #dc2728, Turquesa #40e0d0, Branco Puro #ffffff\"\n   B: \"Primeiros 2s: mulher usando produto com satisfação. Depois corpo: revelação de produto (IGUAL A). Saída: CTA com marca (IGUAL A). Música: upbeat (IGUAL A). Cores: IGUAIS A\"\n   \n   **SE IMAGEM + VÍDEO:**\n   - A imagem deve ter a MESMA COMPOSIÇÃO da imagem que aparece no vídeo\n   - Se o vídeo tem \"mulher no parque\", a imagem deve ser \"mulher no parque\" também\n   - Não gere coisas completamente diferentes\n   \n   Após gerar:\n   - Revise cores e coerência com logo/favicon (usando NOME + HEX)\n   - CONFIRME que A e B diferem APENAS no elemento testado (fundo/gancho)\n   - Documente qual é a hipótese de teste exatamente\n   - Verifique: sem glitch, sem câmera instável, pele natural"
+    },
+    {
+      "number": 16,
+      "name": "COMPILAR_ESTRATEGIA_FINAL",
+      "filename": "EstrategiaFinal_[EMPRESA].md",
+      "objective": "Documento final com estratégia completa",
+      "instructions": "Compile tudo em documento executivo:\n   \n   Estrutura:\n   1. Resumo Executivo (1-2 parágrafos: quem, o quê, por quê)\n   2. Análise de Mercado (3-4 bullets)\n   3. Proposição de Valor (diferenciais)\n   4. ICPs Alvo (nome + 1 linha)\n   5. Estratégia Creative (vídeo ou imagem + 2 linhas)\n   6. Etapa do Funil Foco (Topo/Meio/Fundo)\n   7. Paleta de Cores:\n      - Cor primária: [NOME] #HEX - [uso]\n      - Cor secundária: [NOME] #HEX - [uso]\n      - Cor terciária: [NOME] #HEX - [uso]\n   8. Referência Visual: [URL_FAVICON]\n   9. Calendário Editorial (resumido: semanas 1-4)\n   10. Recomendações:\n       - Canais prioritários (Instagram/TikTok/Google Ads)\n       - Budget sugerido\n       - KPIs de sucesso\n       - Próximos passos\n   11. Links aos documentos gerados (1-15)\n   \n   Tom: Executivo, direto, baseado em dados"
+    },
+    {
+      "number": 17,
+      "name": "RACIONAL_DO_PLANEJAMENTO",
+      "filename": "RacionalEstrategia_[EMPRESA].md",
+      "objective": "Justificar a estratégia de campanha com base em dados e pesquisas",
+      "instructions": "Baseado em tudo anterior (etapas 1-15), explique:\n   - Por que esta abordagem funciona para estes ICPs específicos\n   - Métodos/estratégias escolhidas e fundamentos científicos\n   - Como responde aos gaps/oportunidades identificadas na pesquisa\n   - Por que este positioning vs concorrentes do setor\n   - Premissas validadas e riscos identificados\n   - Esperado em resultados (baseado em benchmarks do setor)"
+    }
+  ]
+}

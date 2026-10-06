@@ -1,0 +1,59 @@
+{
+  "style": "lifestyle",
+  "product": "South Moon Wormwood Fat Burning Cream",
+  "brand": "South Moon",
+  "category": "cosmetics",
+  "framework": "PAS",
+  "problem": "Gordura localizada que resiste mesmo com hábitos saudáveis",
+  "agitate": "A barriga inchada rouba a confiança mesmo quando você cuida do corpo",
+  "solution": "South Moon Wormwood Cream — ação termogênica diária que modela e firma",
+  "hook": "Seu corpo. Seu ritmo. Seu resultado.",
+  "cta": "Peça o seu →",
+  "channels": ["instagram", "facebook"],
+  "aspect_ratio": ["4:5", "9:16"],
+  "assets": [
+    {
+      "asset_type": "img",
+      "variation_label": "lifestyle_v1",
+      "prompt": {
+        "description": "Brazilian woman, 30–38 years old, morena clara skin, athletic build, wearing a sports bra and high-waist leggings. Standing in a modern, bright apartment with large windows. Morning light floods the space. She is holding the South Moon Wormwood Cream jar at waist level, looking down at it with calm confidence. The belly area is visible and toned. Plants visible in the background. Aspirational, editorial lifestyle feel.",
+        "has_realistic_people": true,
+        "subject_context": "Mulher atlética segurando o creme com confiança em apartamento moderno iluminado",
+        "models": [
+          {
+            "sex": "female",
+            "age": "30-38",
+            "skin_color": "morena clara",
+            "style": "activewear",
+            "skin_texture_moisture": "dewy_glow"
+          }
+        ],
+        "pose": "Em pé, postura confiante, segurando o pote na altura da cintura. Olhar sereno, expressão de autocuidado.",
+        "composition": {
+          "angle": "MidBodyShot",
+          "grid": "RuleOfThirds"
+        },
+        "environment": {
+          "place": "Apartamento moderno, sala com janela ampla, manhã cedo",
+          "objects": ["pote South Moon Wormwood Cream", "plantas monstera", "luz solar entrando pela janela", "tapete de yoga enrolado ao fundo"]
+        },
+        "colors": {
+          "background": {
+            "hex": ["#F8F4EF", "#D4C5B0"],
+            "bg_type": "window"
+          },
+          "subject": {
+            "hex": ["#C49A7A", "#2C2C2C"]
+          },
+          "accent": {
+            "hex": ["#7AB87A", "#F0E8DC"]
+          },
+          "saturation_contrast": "Warm, soft high contrast — golden morning light",
+          "harmony": "Analogous"
+        },
+        "illumination": "Strong natural window light from left, warm golden hour tone, minimal fill from right",
+        "emotion_style": "Confiança tranquila, autocuidado aspiracional, lifestyle saudável"
+      }
+    }
+  ]
+}

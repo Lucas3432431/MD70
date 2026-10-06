@@ -1,0 +1,10 @@
+[
+  {
+    "label": "v3-titulo-12h",
+    "prompt": "Generate a professional advertising image based on this clean lifestyle photo. PRESERVE EXACTLY: the person, their pose, expression, clothing, the entire background environment, lighting, and color grading — do not alter any of these. ADD a text block overlay in the left portion of the image (where there is negative space), styled as a clean bold text overlay: Main headline in large bold white text: 'Economize 12h por semana' — this is the only headline text, keep it short, impactful, and perfectly legible. Below it, in smaller white text: 'Seu assistente digital de marketing trabalha enquanto você cuida do negócio.' Below that, a CTA in a contrasting button style: 'Ver como funciona'. The text block should have a dark semi-transparent or solid dark background panel (deep navy or charcoal) to ensure legibility against the photo. Typography must be crisp, modern sans-serif, perfectly anti-aliased and readable. Result must look like a professional Meta Ads creative, 9:16 format."
+  },
+  {
+    "label": "v3-titulo-rasgar-dinheiro",
+    "prompt": "Generate a professional advertising image based on this clean lifestyle photo. PRESERVE EXACTLY: the person, their pose, expression, clothing, the entire background environment, lighting, and color grading — do not alter any of these. ADD a text block overlay in the left portion of the image (where there is negative space), styled as a clean bold text overlay: Main headline in large bold white text: 'Pare de rasgar dinheiro com tráfego pago.' — this is the only headline text, perfectly legible. Below it, in smaller white text: 'Descubra qual campanha converte e pare de investir no que não traz resultado.' Below that, a CTA in a contrasting button style: 'Ver como funciona'. The text block should have a dark semi-transparent or solid dark background panel (deep navy or charcoal) to ensure legibility against the photo. Typography must be crisp, modern sans-serif, perfectly anti-aliased and readable. Result must look like a professional Meta Ads creative, 9:16 format."
+  }
+]

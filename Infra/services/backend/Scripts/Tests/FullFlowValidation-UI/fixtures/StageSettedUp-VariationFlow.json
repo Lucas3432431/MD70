@@ -1,0 +1,6 @@
+{
+  "stage": "variationFlow",
+  "description": "SEM documentos pré-existentes — valida que o bypass _is_variation_doc permite criar document(type='copywriting', variation={...}) sem brand_communication/product/business_canvas consultados previamente. O agente deve conseguir salvar a variação usando apenas variation.reference_image.",
+  "documents": [],
+  "isolated_messages": []
+}

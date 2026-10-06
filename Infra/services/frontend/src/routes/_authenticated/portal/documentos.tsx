@@ -1,0 +1,91 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { Download, Eye, FileText, Search } from "lucide-react";
+import { toast } from "sonner";
+import { PortalHeading } from "@/components/portal/PortalLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { usePortalDocuments } from "@/lib/hooks/usePortalData";
+import { dateBR } from "@/lib/format";
+
+export const Route = createFileRoute("/_authenticated/portal/documentos")({
+  head: () => ({ meta: [
+    { title: "Documentos — Portal MD70" },
+    { name: "description", content: "Contratos, relatórios, extratos e informes dos seus investimentos." },
+    { property: "og:title", content: "Documentos — Portal MD70" },
+    { property: "og:description", content: "Documentos privados dos seus investimentos." },
+  ]}),
+  component: Docs,
+});
+
+function Docs() {
+  const docs = usePortalDocuments();
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("Todos");
+
+  const allDocs = docs.data ?? [];
+  const cats = ["Todos", ...new Set(allDocs.map((d) => d.category))];
+  const list = useMemo(
+    () => allDocs.filter((d) => (cat === "Todos" || d.category === cat) && d.name.toLowerCase().includes(q.toLowerCase())),
+    [allDocs, q, cat],
+  );
+
+  return (
+    <>
+      <PortalHeading eyebrow="Arquivo" title="Documentos">
+        <p>Contratos, relatórios, extratos e informes em um único lugar.</p>
+      </PortalHeading>
+      <div className="flex flex-col gap-3 border bg-card p-4 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar documento" className="pl-10" />
+        </div>
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 border bg-background px-3 text-sm">
+          {cats.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </div>
+      {docs.isPending ? (
+        <p className="mt-10 text-center text-sm text-muted-foreground">Carregando…</p>
+      ) : (
+        <div className="mt-5 border bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="p-4">Documento</th>
+                  <th className="p-4">Categoria</th>
+                  <th className="p-4">Empreendimento</th>
+                  <th className="p-4">Data</th>
+                  <th className="p-4">Tamanho</th>
+                  <th className="p-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((d) => (
+                  <tr key={d.id} className="border-b">
+                    <td className="p-4">
+                      <span className="flex items-center gap-3 font-medium">
+                        <FileText className="size-4 text-primary" />{d.name}
+                      </span>
+                    </td>
+                    <td className="p-4 text-muted-foreground">{d.category}</td>
+                    <td className="p-4 text-muted-foreground">{d.developmentName ?? "Geral"}</td>
+                    <td className="p-4">{dateBR(d.date)}</td>
+                    <td className="p-4 text-muted-foreground">{d.size}</td>
+                    <td className="p-4">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Visualizar" onClick={() => toast.info("Documento demonstrativo: prévia indisponível.")}><Eye /></Button>
+                        <Button variant="ghost" size="icon" title="Baixar" onClick={() => toast.info("Documento demonstrativo: download indisponível.")}><Download /></Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {list.length === 0 && <p className="p-10 text-center text-muted-foreground">Nenhum documento encontrado.</p>}
+        </div>
+      )}
+    </>
+  );
+}

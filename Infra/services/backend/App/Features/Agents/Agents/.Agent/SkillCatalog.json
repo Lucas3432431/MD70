@@ -1,0 +1,118 @@
+{
+  "skill": "SkillCatalog",
+  "lookup_file": "SkillCatalog.md",
+  "allow_message_response": false,
+  "cycle_end_step": "s-design",
+  "entry_step": "s-quiz",
+  "exempt_tools": [
+    "message",
+    "chain_of_thought",
+    "cancel",
+    "task",
+    "schedule",
+    "client",
+    "update",
+    "delete"
+  ],
+  "steps": {
+    "s-quiz": {
+      "name": "Quiz de catálogo",
+      "allowed_tools": ["quiz"],
+      "completion": {
+        "fn": "quiz_answered",
+        "has_attachment": true,
+        "min_answers": 5
+      },
+      "on_success": "s-product-analyze",
+      "blocked_error": "Após o lookup de SkillCatalog.md, o primeiro passo obrigatório é o quiz de catálogo com as 5 perguntas: (1) upload das imagens do produto, (2) imagens de inspiração (attachment até 3 ou URL), (3) categoria do produto, (4) estilo do catálogo e (5) breve especificação do copywriting. Cada pergunta deve ter sua própria resposta.",
+      "correction": [
+        { "step": 1, "call": { "tool": "quiz" } }
+      ]
+    },
+    "s-product-analyze": {
+      "name": "Análise visual do produto",
+      "allowed_tools": ["vision", "web_search", "quiz"],
+      "completion": {
+        "fn": "tool_called_for_attachment",
+        "answer_question_index": 0,
+        "attach_tool": "vision",
+        "url_tools": ["web_search", "web-search"]
+      },
+      "on_success": "s-inspiration-analyze",
+      "blocked_error": "Após o quiz, analise visualmente o produto: execute vision(image_input=['<attach_id>']) se o usuário fez upload, ou web_search com visual_analysis=true + fetch se forneceu URL.",
+      "correction": [
+        { "step": 1, "call": { "tool": "vision", "image_input": ["<attach_id_do_produto>"] } },
+        { "step": 2, "call": { "tool": "web_search", "query": "<url_produto>", "visual_analysis": true } }
+      ]
+    },
+    "s-inspiration-analyze": {
+      "name": "Análise visual da inspiração",
+      "allowed_tools": ["vision", "web_search", "web-search", "quiz"],
+      "completion": {
+        "fn": "vision_after_analyze",
+        "answer_question_index": 1,
+        "url_tools": ["web_search", "web-search"]
+      },
+      "on_success": "s-document",
+      "blocked_error": "Analise a inspiração antes de partir para o document. Se URL: web_search(fetch='<url>') → quiz(image_selection) → vision. Se attachment: vision(image_input=['<attach_id>']).",
+      "correction": [
+        { "step": 1, "call": { "tool": "vision", "image_input": ["<attach_id_da_inspiracao>"] } },
+        { "step": 2, "call": { "tool": "web_search", "query": "<url_inspiracao>", "visual_analysis": true } }
+      ]
+    },
+    "s-document": {
+      "name": "Documento de catálogo",
+      "allowed_tools": ["document"],
+      "completion": {
+        "fn": "document_saved",
+        "document_type": "catalog"
+      },
+      "on_success": "s-asset",
+      "blocked_error": "Após analisar produto e inspiração, execute document(type='catalog', data={...}) para salvar o documento de catálogo incluindo o campo inspiration com as referências analisadas.",
+      "correction": [
+        { "step": 1, "call": { "tool": "document", "type": "catalog" } }
+      ]
+    },
+    "s-asset": {
+      "name": "Geração de assets de catálogo",
+      "allowed_tools": ["asset"],
+      "completion": {
+        "fn": "tool_called",
+        "tool": "asset"
+      },
+      "on_success": "s-vision-post",
+      "blocked_error": "O documento de catálogo foi salvo. Execute asset(document_id='<uuid>') para gerar os assets.",
+      "correction": [
+        { "step": 1, "call": { "tool": "asset", "document_id": "<uuid>" } }
+      ]
+    },
+    "s-vision-post": {
+      "name": "Análise visual do asset gerado",
+      "allowed_tools": ["vision"],
+      "completion": {
+        "fn": "tool_called",
+        "tool": "vision"
+      },
+      "on_success": "s-design",
+      "blocked_error": "Os assets foram gerados. Execute vision(image_input='<asset_id_gerado>') para analisar visualmente o criativo antes de aplicar o design.",
+      "correction": [
+        { "step": 1, "call": { "tool": "vision", "image_input": "<asset_id_gerado>" } }
+      ]
+    },
+    "s-design": {
+      "name": "Design do criativo",
+      "allowed_tools": ["help", "graph_design"],
+      "completion": {
+        "fn": "tool_called",
+        "tool": "graph_design"
+      },
+      "on_success": null,
+      "blocked_error": "Próximo passo: design do criativo.",
+      "blocked_hint": "Execute help(name='graph_design') para carregar o schema de layers, depois graph_design(composition_id='<asset_id_sem_extensao>', asset_id='<asset_id>', composition={...}) para criar o layout visual com texto e elementos gráficos sobre a imagem gerada.",
+      "correction": [
+        { "step": 1, "call": { "tool": "help", "name": "graph_design" } },
+        { "step": 2, "call": { "tool": "graph_design", "composition_id": "<asset_id_sem_extensao>", "asset_id": "<asset_id>", "composition": "{...}" } }
+      ]
+    }
+  }
+}
