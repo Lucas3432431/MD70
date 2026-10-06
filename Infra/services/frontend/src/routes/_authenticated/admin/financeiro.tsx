@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/admin/financeiro")({
   component: Financeiro,
 });
 
-const CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
+const CATEGORIES = ["Capital", "Comissão", "Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 const OBRA_TYPES = ["MO", "Material"];
 const OBRA_CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 
@@ -565,60 +565,104 @@ function NewMovementDialog({
   );
 }
 
-// ─── Filters ─────────────────────────────────────────────────────────────────
+// ─── Scope toggle + filters ───────────────────────────────────────────────────
 
-function Filters({
-  project, onProject, category, onCategory, categories, projects,
+type Scope = "all" | "operational" | "empreendimentos";
+
+function ScopeFilters({
+  scope, onScope, projectId, onProject, category, onCategory, categories, projects, onNew,
 }: {
-  project: string; onProject: (v: string) => void;
+  scope: Scope; onScope: (v: Scope) => void;
+  projectId: string; onProject: (v: string) => void;
   category: string; onCategory: (v: string) => void;
   categories: string[];
   projects: { id: string; name: string }[];
+  onNew: () => void;
 }) {
+  const SCOPES: { key: Scope; label: string }[] = [
+    { key: "all", label: "Todos" },
+    { key: "operational", label: "Operacional" },
+    { key: "empreendimentos", label: "Empreendimentos" },
+  ];
   return (
-    <div className="flex flex-wrap gap-3 text-sm">
-      <label>
-        Empreendimento{" "}
-        <select value={project} onChange={(e) => onProject(e.target.value)} className="ml-2 border bg-background px-3 py-2">
-          <option value="all">Todos</option>
-          <option value="operational">Operacional</option>
-          {projects.filter((p) => p.id !== "fundo-md70").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </label>
-      {categories.length > 1 && (
-        <label>
-          Categoria{" "}
-          <select value={category} onChange={(e) => onCategory(e.target.value)} className="ml-2 border bg-background px-3 py-2">
-            <option value="all">Todas</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </label>
+    <div className="mb-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex rounded border text-sm">
+          {SCOPES.map(({ key, label }) => (
+            <button key={key} onClick={() => onScope(key)}
+              className={cn(
+                "px-4 py-1.5 transition-colors",
+                scope === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+              )}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <button onClick={onNew} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          <Plus className="size-4" /> Novo lançamento
+        </button>
+      </div>
+      {(scope === "empreendimentos" || scope === "all") && (
+        <div className="flex flex-wrap gap-3 text-sm">
+          {scope === "empreendimentos" && (
+            <label>
+              Empreendimento{" "}
+              <select value={projectId} onChange={(e) => onProject(e.target.value)} className="ml-2 border bg-background px-3 py-2">
+                <option value="all">Todos</option>
+                {projects.filter((p) => p.id !== "fundo-md70").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
+          {categories.length > 1 && (
+            <label>
+              Categoria{" "}
+              <select value={category} onChange={(e) => onCategory(e.target.value)} className="ml-2 border bg-background px-3 py-2">
+                <option value="all">Todas</option>
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
       )}
     </div>
   );
+}
+
+function useMovementFilter(movements: ReturnType<typeof useAdmin>["data"]["movements"]) {
+  const [scope, setScope] = useState<Scope>("all");
+  const [projectId, setProjectId] = useState("all");
+  const [category, setCategory] = useState("all");
+
+  const filtered = useMemo(() => movements.filter((m) => {
+    if (scope === "operational" && !m.isOperational) return false;
+    if (scope === "empreendimentos") {
+      if (m.isOperational) return false;
+      if (projectId !== "all" && m.projectId !== projectId) return false;
+    }
+    if (category !== "all" && m.category !== category) return false;
+    return true;
+  }), [movements, scope, projectId, category]);
+
+  return { scope, setScope, projectId, setProjectId, category, setCategory, filtered };
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function CaixaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: string) => void }) {
   const { data } = useAdmin();
-  const [project, setProject] = useState("all");
-  const [category, setCategory] = useState("all");
   const allCategories = useMemo(() => Array.from(new Set(data.movements.map((m) => m.category))).sort(), [data.movements]);
-  const movements = useMemo(() => data.movements.filter((m) =>
-    m.status === "Realizado" &&
-    (project === "all" || (project === "operational" ? m.isOperational : m.projectId === project)) &&
-    (category === "all" || m.category === category)
-  ).sort((a, b) => b.date.localeCompare(a.date)), [data.movements, project, category]);
+  const { scope, setScope, projectId, setProjectId, category, setCategory, filtered } = useMovementFilter(data.movements);
+  const movements = useMemo(() => filtered.filter((m) => m.status === "Realizado")
+    .sort((a, b) => b.date.localeCompare(a.date)), [filtered]);
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Filters project={project} onProject={setProject} category={category} onCategory={setCategory} categories={allCategories} projects={data.projects} />
-        <button onClick={onNew} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          <Plus className="size-4" /> Novo lançamento
-        </button>
-      </div>
+      <ScopeFilters
+        scope={scope} onScope={setScope}
+        projectId={projectId} onProject={setProjectId}
+        category={category} onCategory={setCategory}
+        categories={allCategories} projects={data.projects} onNew={onNew}
+      />
       <div className="space-y-2">
         {movements.map((m) => {
           const projName = data.projects.find((p) => p.id === m.projectId)?.name ?? m.projectId;
@@ -633,26 +677,22 @@ function CaixaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: strin
 
 function CompetenciaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: string) => void }) {
   const { data } = useAdmin();
-  const [project, setProject] = useState("all");
-  const [category, setCategory] = useState("all");
   const allCategories = useMemo(() => Array.from(new Set(data.movements.map((m) => m.category))).sort(), [data.movements]);
-  const movements = useMemo(() => data.movements.filter((m) =>
-    (project === "all" || (project === "operational" ? m.isOperational : m.projectId === project)) &&
-    (category === "all" || m.category === category)
-  ).sort((a, b) => {
+  const { scope, setScope, projectId, setProjectId, category, setCategory, filtered } = useMovementFilter(data.movements);
+  const movements = useMemo(() => filtered.sort((a, b) => {
     const da = a.dateCompetencia ?? a.date;
     const db = b.dateCompetencia ?? b.date;
     return db.localeCompare(da);
-  }), [data.movements, project, category]);
+  }), [filtered]);
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Filters project={project} onProject={setProject} category={category} onCategory={setCategory} categories={allCategories} projects={data.projects} />
-        <button onClick={onNew} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          <Plus className="size-4" /> Novo lançamento
-        </button>
-      </div>
+      <ScopeFilters
+        scope={scope} onScope={setScope}
+        projectId={projectId} onProject={setProjectId}
+        category={category} onCategory={setCategory}
+        categories={allCategories} projects={data.projects} onNew={onNew}
+      />
       <div className="space-y-2">
         {movements.map((m) => {
           const projName = data.projects.find((p) => p.id === m.projectId)?.name ?? m.projectId;

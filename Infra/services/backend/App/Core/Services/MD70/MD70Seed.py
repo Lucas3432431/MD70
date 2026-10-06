@@ -117,6 +117,8 @@ def seed_md70_data(engine) -> None:
         # ------------------------------------------------------------------ #
         # id, dev_id, date, description, category, direction, value, status
         movements = [
+            ("mv00a", "saude-rio-claro", "2026-06-01", "Captação Cachorrão",  "Capital",   "Entrada", 100_000.00, "Realizado"),
+            ("mv00b", "saude-rio-claro", "2026-06-15", "Comissão na compra",  "Comissão",  "Entrada",  12_600.00, "Realizado"),
             ("mv01", "saude-rio-claro", "2026-06-01", "Compra da casa — Entrada",           "Aquisição do imóvel",    "Saída", 168_000.00, "Realizado"),
             ("mv02", "saude-rio-claro", "2026-06-15", "Compra da casa — Parcela",            "Aquisição do imóvel",    "Saída",   5_000.00, "Realizado"),
             ("mv03", "saude-rio-claro", "2026-07-01", "Arquiteta — 1° parcela",              "Projetos",               "Saída",   1_600.00, "Realizado"),
@@ -188,10 +190,10 @@ def seed_md70_data(engine) -> None:
         # ------------------------------------------------------------------ #
         leads = [
             # id, name, email, phone, project_interest, status, source, value, notes, created_at
-            ("l1", "Cachorrão", "cachorrão@md70.local", None, "saude-rio-claro", "Em negociação", "Indicação", 100_000, None, "2026-01-10"),
-            ("l2", "Mexicano",  "mexicano@md70.local",  None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
-            ("l3", "Fernando",  "fernando@md70.local",  None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
-            ("l4", "Du",        "du@md70.local",        None, "saude-rio-claro", "Em negociação", "Indicação",       0, None, "2026-01-10"),
+            ("l1", "Cachorrão", "cachorrão@md70.local", None, "saude-rio-claro", "Investidor ativo", "Indicação", 100_000, None, "2026-01-10"),
+            ("l2", "Mexicano",  "mexicano@md70.local",  None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
+            ("l3", "Fernando",  "fernando@md70.local",  None, "saude-rio-claro", "Investidor ativo", "Indicação",       0, None, "2026-01-10"),
+            ("l4", "Du",        "du@md70.local",        None, "saude-rio-claro", "Em negociação",   "Indicação",       0, None, "2026-01-10"),
         ]
         for l_id, name, email, phone, proj_interest, status, source, value, notes, created_at in leads:
             conn.execute(text(
