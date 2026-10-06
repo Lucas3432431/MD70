@@ -1,6 +1,6 @@
 export type PurchaseStatus = "Solicitado" | "Fornecedores Contatados" | "Orçamento 1" | "Orçamento 2" | "Orçamento 3" | "Aguardando entrega" | "Entregue" | "Cancelado";
 export type ProjectStage = "Oferecido / Interessado" | "Visita" | "Business Plan / Capital" | "Projeto" | "Proposta / Negociação" | "Construção / Reforma" | "Vendido";
-export type AdminProject = { id: string; name: string; status: ProjectStage; progress: number; capital: number; budget: number; remaining: number; forecast?: string; imageUrl?: string; city?: string; category?: string; summary?: string };
+export type AdminProject = { id: string; name: string; status: ProjectStage; progress: number; capital: number; budget: number; remaining: number; forecast?: string; imageUrl?: string; city?: string; category?: string; summary?: string; vgv?: number };
 export type BudgetLine = { id: string; projectId: string; category: string; item: string; planned: number; realized: number; committed: number; remaining: number; quantity?: number; unit?: string; note?: string };
 export type Supplier = { id: string; name: string; cnpj?: string; contact?: string; phone?: string; email?: string; notes?: string };
 export type Quote = { id: string; supplierId: string; value: number; shipping: number; discount: number; payment: string; delivery: string; validity: string; notes?: string; attachment?: string };

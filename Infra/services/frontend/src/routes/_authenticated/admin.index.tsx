@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { PrevistVsRealizadoChart } from "@/components/admin/PrevistVsRealizadoChart";
-import { quoteTotal, sum } from "@/lib/data/admin-calculations";
-import { brl, brlShort } from "@/lib/format";
+import { sum } from "@/lib/data/admin-calculations";
+import { brlShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList } from "recharts";
 
@@ -21,26 +21,19 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 
 function AdminHome() {
   const { data } = useAdmin();
-  const readyToApprove = data.purchases.filter((p) => p.status === "Orçamento 3");
 
   const patrimonioSobGestao = sum(
-    data.projects.filter((p) => p.status !== "Vendido").map((p) => p.capital),
+    data.movements
+      .filter((m) => m.status === "Realizado")
+      .map((m) => m.direction === "Entrada" ? m.value : -m.value),
   );
 
   const currentYear = new Date().getFullYear().toString();
+  const OPERATIONAL_CATEGORIES = ["Comissão", "Receita", "Operação", "Serviços"];
   const faturamentoAno = sum(
     data.movements
-      .filter((m) => m.direction === "Entrada" && m.status === "Realizado" && m.date.startsWith(currentYear))
+      .filter((m) => m.direction === "Entrada" && m.status === "Realizado" && m.date.startsWith(currentYear) && OPERATIONAL_CATEGORIES.includes(m.category))
       .map((m) => m.value),
-  );
-
-  const economizadoCompras = sum(
-    data.purchases
-      .filter((p) => p.selectedQuoteId)
-      .map((p) => {
-        const chosen = p.quotes.find((q) => q.id === p.selectedQuoteId);
-        return chosen ? Math.max(0, p.estimate - quoteTotal(chosen)) : 0;
-      }),
   );
 
   return (
@@ -48,28 +41,17 @@ function AdminHome() {
       <AdminHeading title="Visão geral">Caixa, orçamento e compras em um único lugar.</AdminHeading>
 
       {/* Hero KPI cards */}
-      <div className="grid gap-px border bg-border md:grid-cols-3">
+      <div className="grid gap-px border bg-border md:grid-cols-2">
         <div className="bg-primary p-7 text-primary-foreground">
           <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio sob gestão</p>
           <p className="num mt-4 font-display text-4xl md:text-5xl">{brlShort(patrimonioSobGestao)}</p>
-          <p className="mt-3 text-sm opacity-70">Capital em projetos ativos</p>
+          <p className="mt-3 text-sm opacity-70">Saldo líquido de movimentações realizadas</p>
         </div>
         <div className="bg-card p-7">
           <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Faturamento {currentYear}</p>
           <p className="num mt-4 font-display text-4xl text-primary md:text-5xl">{brlShort(faturamentoAno)}</p>
-          <p className="mt-3 text-sm text-muted-foreground">Entradas realizadas no ano</p>
+          <p className="mt-3 text-sm text-muted-foreground">Entradas operacionais realizadas no ano</p>
         </div>
-        <div className="bg-card p-7">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Economizado em compras</p>
-          <p className="num mt-4 font-display text-2xl text-primary">{economizadoCompras > 0 ? brl(economizadoCompras) : "—"}</p>
-          <p className="mt-3 text-sm text-muted-foreground">Negociação vs. estimativa</p>
-        </div>
-      </div>
-
-      {/* Compras pendentes */}
-      <div className="mt-6 w-fit border bg-card p-5 md:p-6">
-        <p className="text-xs text-muted-foreground">Compras pendentes</p>
-        <p className="num mt-3 font-display text-3xl text-primary">{readyToApprove.length}</p>
       </div>
 
       <Charts />

@@ -232,15 +232,20 @@ function Detail() {
           ["Caixa disponível", s.cash],
           ["Orçamento", s.budget],
           ["Realizado", s.spent],
-          ["Comprometido", s.committed],
           ["Forecast", s.forecast],
-          ["Saldo de orçamento", s.balance],
+          ["Saldo Forecast", s.saldoForecast],
         ] as [string, number][]).map(([l, v]) => (
           <div key={l} className="bg-card p-5">
             <p className="text-xs text-muted-foreground">{l}</p>
             <p className="num mt-2 font-display text-2xl text-primary">{brl(v)}</p>
           </div>
         ))}
+        {project.vgv != null && project.vgv > 0 && (
+          <div className="bg-card p-5">
+            <p className="text-xs text-muted-foreground">VGV</p>
+            <p className="num mt-2 font-display text-2xl text-primary">{brl(project.vgv)}</p>
+          </div>
+        )}
         {project.forecast && (
           <div className="bg-card p-5">
             <p className="text-xs text-muted-foreground">Previsão</p>

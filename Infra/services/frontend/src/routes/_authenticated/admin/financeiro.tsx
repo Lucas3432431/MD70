@@ -26,9 +26,9 @@ export const Route = createFileRoute("/_authenticated/admin/financeiro")({
   component: Financeiro,
 });
 
-const CATEGORIES = ["Vendas", "Serviços", "Material", "Mão de obra", "Taxas", "Jurídico", "Marketing", "Outros"];
+const CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 const OBRA_TYPES = ["MO", "Material"];
-const OBRA_CATEGORIES = ["Elétrica", "Hidráulica", "Estrutural", "Acabamentos", "Alvenaria", "Demolição", "Outros"];
+const OBRA_CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 
 // ─── Movement detail drawer ───────────────────────────────────────────────────
 

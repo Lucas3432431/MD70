@@ -53,18 +53,18 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
     active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
   );
   return (
-    <div className="min-h-screen flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+    <div className="min-h-screen flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <header className={cn("z-30 w-full", overlay ? "absolute top-0 text-primary-foreground" : "border-b bg-background text-primary")}>
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
           <Link to="/" aria-label="MD70 — início"><Logo /></Link>
-          <nav className="hidden items-center gap-8 lg:flex">
+          <nav className="hidden">
             {nav.map((n) => (
               <Link key={n.to} to={n.to} className="text-[0.8rem] tracking-wide opacity-80 transition-opacity hover:opacity-100" activeProps={{ className: "opacity-100 underline underline-offset-8" }}>
                 {n.label}
               </Link>
             ))}
           </nav>
-          <div className="hidden items-center gap-5 lg:flex">
+          <div className="hidden">
             <Link to="/portal" className="text-[0.8rem] tracking-wide opacity-80 hover:opacity-100">Área do investidor</Link>
             <Link to="/quero-investir" className={cn("px-4 py-2 text-[0.72rem] uppercase tracking-[0.16em] border", overlay ? "border-primary-foreground/50 hover:bg-primary-foreground/10" : "border-primary hover:bg-primary hover:text-primary-foreground transition-colors")}>
               Quero investir
@@ -99,8 +99,8 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
       </footer>
       {open && (
         <>
-          <Button variant="ghost" className="fixed inset-0 z-30 h-auto rounded-none bg-ink/30 hover:bg-ink/30 lg:hidden" aria-label="Fechar navegação" onClick={() => setOpen(null)} />
-          <div id={`site-category-${open}`} aria-label={mobileCategories[open].label} className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-background px-6 py-4 shadow-soft lg:hidden">
+          <Button variant="ghost" className="fixed inset-0 z-30 h-auto rounded-none bg-ink/30 hover:bg-ink/30" aria-label="Fechar navegação" onClick={() => setOpen(null)} />
+          <div id={`site-category-${open}`} aria-label={mobileCategories[open].label} className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-background px-6 py-4 shadow-soft">
             <p className="eyebrow mb-2">{mobileCategories[open].label}</p>
             {mobileCategories[open].links.map(({ to, label }) => (
               <Link key={to} to={to} onClick={() => setOpen(null)} aria-current={pathname === to ? "page" : undefined} className={cn("block border-b py-3 text-sm text-foreground last:border-0", pathname === to && "font-semibold text-primary")}>{label}</Link>
@@ -108,7 +108,7 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
           </div>
         </>
       )}
-      <nav aria-label="Navegação institucional" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-soft backdrop-blur lg:hidden">
+      <nav aria-label="Navegação institucional" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-soft backdrop-blur">
         <div className="mx-auto grid h-16 grid-cols-5 px-1 md:flex md:h-[4.5rem] md:items-stretch md:justify-center md:gap-1 md:px-8">
           <Link to="/" onClick={() => setOpen(null)} aria-current={pathname === "/" ? "page" : undefined} className={linkClass(pathname === "/")}>
             <House className="size-5 shrink-0" aria-hidden="true" /><span>Início</span>

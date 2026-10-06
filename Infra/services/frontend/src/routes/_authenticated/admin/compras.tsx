@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/admin/compras")({
 });
 
 const OBRA_TYPES = ["MO", "Material"];
-const OBRA_CATEGORIES = ["Elétrica", "Hidráulica", "Estrutural", "Acabamentos", "Alvenaria", "Demolição", "Outros"];
+const OBRA_CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
 
 const STAGES: PurchaseStatus[] = [
   "Solicitado", "Fornecedores Contatados", "Orçamento 1", "Orçamento 2", "Orçamento 3",

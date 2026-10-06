@@ -191,7 +191,7 @@ function AdminProjects() {
                 <div className="space-y-2">
                   {projects.map((p) => {
                     const s = projectSummary(data, p.id);
-                    const health = s.budget > 0 ? budgetStatus(s.balance, s.budget) : null;
+                    const health = s.budget > 0 ? budgetStatus(s.saldoForecast, s.budget) : null;
                     return (
                       <Link
                         key={p.id}
