@@ -184,7 +184,7 @@ services:
     tmpfs:
       - /app/node_modules/.vite-temp:mode=1777,size=64M
       - /app/node_modules/.vite:mode=1777,size=256M
-      - /tmp:mode=1777,size=128M
+      # /tmp fica nos overlays (dev: 128M, prod: 512m) — podman-compose concatena tmpfs e rejeita destino duplicado
     environment:
       - IS_CONTAINERED=true
       - ENV=${ENV}
@@ -232,6 +232,8 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - WEB_HOST=${GATEWAY_WEB_HOST}
       - WEB_PORT=${GATEWAY_WEB_PORT}
+      - ANALYTICS_HOST=${GATEWAY_ANALYTICS_HOST:-analytics}
+      - ANALYTICS_PORT=${ANALYTICS_PORT:-3001}
       - MODSECURITY_ENABLED=on
       - ANOMALY_INBOUND=${ANOMALY_INBOUND:-100}
       - ANOMALY_OUTBOUND=${ANOMALY_OUTBOUND:-100}

@@ -2,6 +2,10 @@
 # os node_modules e o código já buildados dentro das imagens.
 services:
   frontend:
+    # entrypoint roda `vite build` no start e o nitro apaga/recria /app/.output
+    # (tmpfs não serve: ponto de montagem não pode ser removido). Mover o build
+    # para a imagem permitiria voltar a read_only.
+    read_only: false
     volumes:
       - ./secrets/frontend.secrets:/run/secrets/app.env:ro
     tmpfs:

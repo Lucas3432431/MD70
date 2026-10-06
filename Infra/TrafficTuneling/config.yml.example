@@ -1,0 +1,13 @@
+# Configuração do túnel Cloudflare do MD70 (cloudflared, modo "locally-managed").
+# Vai em ~/cloudflared/config.yml dentro da máquina do Podman (montado em /etc/cloudflared).
+# O arquivo de credenciais <TUNNEL_ID>.json NUNCA vai para o git.
+
+tunnel: 0ef4fe3c-875e-4893-ad30-2e4c742a18e1
+credentials-file: /etc/cloudflared/0ef4fe3c-875e-4893-ad30-2e4c742a18e1.json
+
+ingress:
+  # MD70 gateway (nginx) — porta = GATEWAY_HTTP_PORT do .env.production
+  - hostname: md70.zera.tec.br
+    service: http://localhost:8080
+  # Qualquer outro hostname apontado para este túnel recebe 404
+  - service: http_status:404
