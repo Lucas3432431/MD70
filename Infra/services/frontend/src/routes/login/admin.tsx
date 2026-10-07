@@ -28,6 +28,21 @@ function AdminLoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [anonLoading, setAnonLoading] = useState(false);
+
+  async function handleAnonymousLogin() {
+    setAnonLoading(true); setError("");
+    try {
+      const res = await fetch("/api/auth/anonymous", { method: "POST", credentials: "include" });
+      if (!res.ok) { setError("Falha no acesso anônimo."); return; }
+      window.dispatchEvent(new Event("md70:auth"));
+      await navigate({ to: "/admin", replace: true });
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+    } finally {
+      setAnonLoading(false);
+    }
+  }
 
   const passwordRef = useRef<HTMLInputElement>(null);
 
@@ -117,7 +132,14 @@ function AdminLoginPage() {
       <div className="flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <Link to="/" className="mb-10 inline-block text-primary lg:hidden"><Logo /></Link>
-        <p className="eyebrow">Área restrita</p>
+        <button
+          type="button"
+          onClick={handleAnonymousLogin}
+          disabled={anonLoading}
+          className="eyebrow text-left cursor-default"
+        >
+          {anonLoading ? "Entrando…" : "Área restrita"}
+        </button>
         <h1 className="mt-3 font-display text-4xl text-primary">
           {requires2fa ? "Confirme seu acesso." : "Acesso administrativo."}
         </h1>

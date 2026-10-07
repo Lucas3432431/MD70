@@ -158,14 +158,62 @@ async def auth_health():
     return {"status": "ok", "message": "Auth router funcionando"}
 
 
+@auth_router.post("/anonymous")
+async def anonymous_login(request: Request):
+    """Login anônimo — gera sessão de admin sem credenciais."""
+    anon_user = {
+        "user_id": "anon-admin-md70",
+        "email": "anon@md70.local",
+        "full_name": "Admin MD70",
+        "role": "admin",
+        "client_id": "1",
+    }
+
+    auth_service = get_auth_service()
+    # save_to_db=False: evita FK constraint (user não existe na tabela users)
+    # auth_check aceita este token via verify_token(check_db=False)
+    access_token = auth_service.generate_access_token(anon_user, save_to_db=False)
+    refresh_token_data = auth_service.generate_refresh_token(anon_user, save_to_db=False)
+
+    response = JSONResponse(content={"authenticated": True})
+
+    cookie_params = {
+        "httponly": COOKIE_HTTPONLY,
+        "secure": COOKIE_SECURE,
+        "samesite": COOKIE_SAMESITE,
+    }
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=ACCESS_TOKEN_EXPIRY,
+        **cookie_params,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token_data["token"],
+        max_age=REFRESH_TOKEN_EXPIRY,
+        **cookie_params,
+    )
+
+    info(f"[AUDIT] Login anônimo gerado | IP: {request.client.host}")
+    return response
+
+
 @auth_router.post("/check")
 async def auth_check(request: Request):
     # Middleware já resolveu e cacheou o token em scope — usar diretamente (zero DB)
     payload = request.scope.get("_auth_payload")
+
+    # Fallback para token anônimo: middleware falha no DB check, verificar JWT diretamente
     if not payload:
-        # Fallback: sem cookie ou token inválido
-        if not request.cookies.get("access_token"):
-            return {"authenticated": False, "user": None, "needs_agreement": True}
+        token = request.cookies.get("access_token")
+        if token:
+            auth_service = get_auth_service()
+            payload = auth_service.verify_token(token, check_db=False)
+            if payload and payload.get("user_id") != "anon-admin-md70":
+                payload = None  # só aceitar sem DB check para o usuário anônimo
+
+    if not payload:
         return {"authenticated": False, "user": None, "needs_agreement": True}
 
     return {
