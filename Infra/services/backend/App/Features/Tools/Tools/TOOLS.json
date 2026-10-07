@@ -661,7 +661,7 @@
           "email": { "type": "string" },
           "phone": { "type": "string" },
           "project_interest": { "type": "string" },
-          "status": { "type": "string", "description": "Interesse | Qualificado | Em negociação | Investidor ativo | Descartado" },
+          "status": { "type": "string", "description": "Interesse | Qualificado | Em negociação | Investidor ativo | Descartado/Adiado" },
           "source": { "type": "string" },
           "value": { "type": "number" },
           "notes": { "type": "string" },

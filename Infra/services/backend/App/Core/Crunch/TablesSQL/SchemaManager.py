@@ -79,6 +79,60 @@ class SchemaManager:
         except Exception:
             return False
 
+    @staticmethod
+    def _md70_leads_ddl(table: str) -> str:
+        return f"""
+            CREATE TABLE IF NOT EXISTS {table} (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                phone TEXT,
+                project_interest TEXT REFERENCES md70_developments(id) ON DELETE SET NULL,
+                status TEXT NOT NULL DEFAULT 'Interesse'
+                    CHECK(status IN (
+                        'Interesse','Qualificado','Em negociação','Investidor ativo','Descartado','Descartado/Adiado'
+                    )),
+                source TEXT NOT NULL,
+                value REAL,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+
+    def _migrate_md70_leads_status_check(self) -> None:
+        """Recria md70_leads quando o CHECK de status não aceita 'Descartado/Adiado'.
+
+        SQLite não altera CHECK de tabela existente: cria a nova, copia, apaga a antiga e renomeia.
+        foreign_keys fica OFF durante a troca para o DROP não disparar o ON DELETE SET NULL
+        de md70_investors.lead_id. Todos os status antigos são válidos no CHECK novo.
+        """
+        try:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT sql FROM sqlite_master WHERE type='table' AND name='md70_leads'")
+                ).fetchone()
+                if not row or "Descartado/Adiado" in (row[0] or ""):
+                    return
+
+                cols = "id, name, email, phone, project_interest, status, source, value, notes, created_at, updated_at"
+                conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                try:
+                    conn.exec_driver_sql("DROP TABLE IF EXISTS md70_leads_new")
+                    conn.exec_driver_sql(self._md70_leads_ddl("md70_leads_new"))
+                    conn.exec_driver_sql(f"INSERT INTO md70_leads_new ({cols}) SELECT {cols} FROM md70_leads")
+                    conn.exec_driver_sql("DROP TABLE md70_leads")
+                    conn.exec_driver_sql("ALTER TABLE md70_leads_new RENAME TO md70_leads")
+                    conn.commit()
+                    info("[SCHEMA] Migration: md70_leads recriada com status 'Descartado/Adiado'")
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+        except Exception as e:
+            error(f"[SCHEMA] Migration md70_leads status CHECK falhou: {e}")
+
     def _backfill_product_cpu(self) -> None:
         """Replay WAC from transaction history for any products_stock rows with cost_per_unit = 0."""
         try:
@@ -1402,27 +1456,10 @@ class SchemaManager:
             "Index: idx_md70_documents_movement",
         )
 
-        self.run_sql(
-            """
-            CREATE TABLE IF NOT EXISTS md70_leads (
-                id TEXT PRIMARY KEY NOT NULL,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                phone TEXT,
-                project_interest TEXT REFERENCES md70_developments(id) ON DELETE SET NULL,
-                status TEXT NOT NULL DEFAULT 'Interesse'
-                    CHECK(status IN (
-                        'Interesse','Qualificado','Em negociação','Investidor ativo','Descartado'
-                    )),
-                source TEXT NOT NULL,
-                value REAL,
-                notes TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            """,
-            "Table: md70_leads",
-        )
+        # Migration: recria md70_leads se o CHECK de status for anterior a 'Descartado/Adiado'
+        self._migrate_md70_leads_status_check()
+
+        self.run_sql(self._md70_leads_ddl("md70_leads"), "Table: md70_leads")
 
         self.run_sql(
             "CREATE INDEX IF NOT EXISTS idx_md70_leads_status ON md70_leads (status);",
