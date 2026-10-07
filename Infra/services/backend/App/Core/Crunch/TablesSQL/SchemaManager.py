@@ -14,7 +14,7 @@ from App.Core.Logs import info, warning, error, debug
 class SchemaManager:
     """
     Gerenciador de schema do banco de dados.
-    Responsável por criar tabelas, triggers, índices e dados mock.
+    Responsável por criar tabelas, triggers e índices.
     Suporta sufixo de ambiente (dev_/prod_) para cloud.
     """
 
@@ -2415,7 +2415,6 @@ class SchemaManager:
         1. Tabelas
         2. Triggers e Índices (apenas para local/postgresql)
         3. Sincronizar planos (popular tabela plans)
-        4. Dados Mock (apenas para local/postgresql e quando necessário)
         """
         try:
             # Log inicial mostrando qual schema está usando
@@ -2440,11 +2439,6 @@ class SchemaManager:
             from App.Core.Crunch.PlansSync import PlansSync
 
             PlansSync.sync(self.engine, self.config)
-
-            # DEPOIS: Inserir dados mock (que depende dos planos)
-            from App.Core.Crunch.MockData import MockData
-
-            MockData.sync(self.engine)
 
             # HIDRATAÇÃO: Puxar dados ativos do Supabase se o banco local estiver vazio
             self.hydrate_from_cloud()

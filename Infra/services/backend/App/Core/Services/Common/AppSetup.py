@@ -599,18 +599,6 @@ async def startup_event():
     except Exception as e:
         error(f"[SCHEMA] Erro ao criar tabelas ORM: {e}")
 
-    # Seed MD70 demo data (idempotent — skips if already seeded)
-    try:
-        from App.Core.Services.MD70.MD70Seed import seed_md70_data
-        from App.Core.Crunch.TablesSQL.Database import database as _db
-
-        if _db.engine is not None:
-            seed_md70_data(_db.engine)
-        else:
-            warning("[MD70Seed] Engine not ready — skipping seed.")
-    except Exception as e:
-        error(f"[MD70Seed] Seed error: {e}")
-
     # Inicialização dos Componentes
     debug("[AppSetup] Criando cliente OpenAI...")
     try:
