@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchLead, useCreateLead, useDeleteLead } from "@/lib/hooks/useAdminData";
@@ -304,6 +304,7 @@ function CRM() {
   const { data } = useAdmin();
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [openStages, setOpenStages] = useState<Set<string>>(new Set());
   const selectedLead = selected ? data.leads.find((l) => l.id === selected) ?? null : null;
 
   const investedByName = useMemo(() => {
@@ -317,6 +318,33 @@ function CRM() {
     return map;
   }, [data.movements]);
 
+  function toggleStage(stage: string) {
+    setOpenStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(stage)) next.delete(stage); else next.add(stage);
+      return next;
+    });
+  }
+
+  function renderLeadCard(lead: ReturnType<typeof useAdmin>["data"]["leads"][number], isActive: boolean) {
+    const interests = lead.projectInterests ?? (lead.projectInterest ? [{ projectId: lead.projectInterest, value: lead.value }] : []);
+    const projNames = interests.map((pi) => data.projects.find((p) => p.id === pi.projectId)?.name).filter(Boolean);
+    const invested = isActive ? (investedByName.get(lead.name) ?? 0) : 0;
+    const potentialValue = interests.reduce((s, i) => s + ((i as { value?: number }).value ?? 0), 0);
+    const displayValue = isActive ? invested : potentialValue;
+    return (
+      <button key={lead.id} onClick={() => setSelected(lead.id)}
+        className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
+        <p className="truncate text-sm font-semibold text-primary">{lead.name}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{projNames.length ? projNames.join(", ") : "—"}</p>
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="truncate rounded-sm bg-muted px-1.5 py-0.5 text-[10px]">{lead.source}</span>
+          {displayValue > 0 && <span className={cn("num shrink-0", isActive && "text-positive")}>{brl(displayValue)}</span>}
+        </div>
+      </button>
+    );
+  }
+
   return (
     <>
       <AdminHeading title="CRM">Leads e investidores por empreendimento e estágio do funil.</AdminHeading>
@@ -327,7 +355,37 @@ function CRM() {
         </button>
       </div>
 
-      <div className="overflow-x-auto pb-4">
+      {/* Mobile: collapsible stacked cards */}
+      <div className="sm:hidden space-y-1">
+        {STAGES.map((stage) => {
+          const cards = data.leads.filter((l) => l.status === stage);
+          const isActive = stage === "Investidor ativo";
+          const isOpen = openStages.has(stage);
+          return (
+            <div key={stage} className="border">
+              <button
+                onClick={() => toggleStage(stage)}
+                className={cn("flex w-full items-center justify-between border-t-2 px-4 py-3 text-left", STAGE_COLOR[stage])}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage}</span>
+                  <span className="num font-display text-xl text-primary">{cards.length}</span>
+                </div>
+                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+              </button>
+              {isOpen && (
+                <div className="space-y-2 p-3">
+                  {cards.map((lead) => renderLeadCard(lead, isActive))}
+                  {cards.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: horizontal kanban */}
+      <div className="hidden sm:block overflow-x-auto pb-4">
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
             const cards = data.leads.filter((l) => l.status === stage);
@@ -339,28 +397,7 @@ function CRM() {
                   <p className="num mt-1 font-display text-2xl text-primary">{cards.length}</p>
                 </div>
                 <div className="space-y-2">
-                  {cards.map((lead) => {
-                    const interests = lead.projectInterests ?? (lead.projectInterest ? [{ projectId: lead.projectInterest, value: lead.value }] : []);
-                    const projNames = interests.map((pi) => data.projects.find((p) => p.id === pi.projectId)?.name).filter(Boolean);
-                    const invested = isActive ? (investedByName.get(lead.name) ?? 0) : 0;
-                    const potentialValue = interests.reduce((s, i) => s + ((i as { value?: number }).value ?? 0), 0);
-                    const displayValue = isActive ? invested : potentialValue;
-                    return (
-                      <button key={lead.id} onClick={() => setSelected(lead.id)}
-                        className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
-                        <p className="truncate text-sm font-semibold text-primary">{lead.name}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {projNames.length ? projNames.join(", ") : "—"}
-                        </p>
-                        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <span className="truncate rounded-sm bg-muted px-1.5 py-0.5 text-[10px]">{lead.source}</span>
-                          {displayValue > 0 && (
-                            <span className={cn("num shrink-0", isActive && "text-positive")}>{brl(displayValue)}</span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {cards.map((lead) => renderLeadCard(lead, isActive))}
                   {cards.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
                 </div>
               </div>

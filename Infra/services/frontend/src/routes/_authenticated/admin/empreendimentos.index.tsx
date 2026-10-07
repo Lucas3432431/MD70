@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { useCreateProject } from "@/lib/hooks/useAdminData";
@@ -161,9 +162,50 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function ProjectCard({ p, data }: { p: ReturnType<typeof useAdmin>["data"]["projects"][number]; data: ReturnType<typeof useAdmin>["data"] }) {
+  const s = projectSummary(data, p.id);
+  const health = s.budget > 0 ? budgetStatus(s.saldoForecast, s.budget) : null;
+  return (
+    <Link
+      to="/admin/empreendimentos/$id"
+      params={{ id: p.id }}
+      className="block border bg-card p-3 transition-colors hover:bg-accent/20"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold text-primary leading-tight">{p.name}</p>
+        {health && <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${HEALTH_DOT[health]}`} />}
+      </div>
+      {p.city && <p className="mt-0.5 text-[10px] text-muted-foreground">{p.city}</p>}
+      {p.progress > 0 && (
+        <div className="mt-2">
+          <div className="h-1 bg-muted"><div className="h-full bg-primary" style={{ width: `${p.progress}%` }} /></div>
+          <p className="mt-1 text-[10px] text-muted-foreground">{p.progress}%</p>
+        </div>
+      )}
+      {s.capital > 0 && (
+        <div className="mt-2 grid grid-cols-2 gap-x-2 text-[10px]">
+          <span className="text-muted-foreground">Capital</span>
+          <span className="num text-right">{brlShort(s.capital)}</span>
+          <span className="text-muted-foreground">Forecast</span>
+          <span className="num text-right">{brlShort(s.forecast)}</span>
+        </div>
+      )}
+    </Link>
+  );
+}
+
 function AdminProjects() {
   const { data } = useAdmin();
   const [showNew, setShowNew] = useState(false);
+  const [openStages, setOpenStages] = useState<Set<string>>(new Set());
+
+  function toggleStage(stage: string) {
+    setOpenStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(stage)) next.delete(stage); else next.add(stage);
+      return next;
+    });
+  }
 
   return (
     <>
@@ -178,7 +220,36 @@ function AdminProjects() {
         </button>
       </div>
 
-      <div className="overflow-x-auto pb-4">
+      {/* Mobile: collapsible stacked cards */}
+      <div className="sm:hidden space-y-1">
+        {STAGES.map((stage) => {
+          const projects = data.projects.filter((p) => p.status === stage);
+          const isOpen = openStages.has(stage);
+          return (
+            <div key={stage} className="border">
+              <button
+                onClick={() => toggleStage(stage)}
+                className={cn("flex w-full items-center justify-between border-t-2 px-4 py-3 text-left", STAGE_COLOR[stage])}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage}</span>
+                  <span className="num font-display text-xl text-primary">{projects.length}</span>
+                </div>
+                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+              </button>
+              {isOpen && (
+                <div className="space-y-2 p-3">
+                  {projects.map((p) => <ProjectCard key={p.id} p={p} data={data} />)}
+                  {projects.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: horizontal kanban */}
+      <div className="hidden sm:block overflow-x-auto pb-4">
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
             const projects = data.projects.filter((p) => p.status === stage);
@@ -189,43 +260,8 @@ function AdminProjects() {
                   <p className="num mt-1 font-display text-2xl text-primary">{projects.length}</p>
                 </div>
                 <div className="space-y-2">
-                  {projects.map((p) => {
-                    const s = projectSummary(data, p.id);
-                    const health = s.budget > 0 ? budgetStatus(s.saldoForecast, s.budget) : null;
-                    return (
-                      <Link
-                        key={p.id}
-                        to="/admin/empreendimentos/$id"
-                        params={{ id: p.id }}
-                        className="block border bg-card p-3 transition-colors hover:bg-accent/20"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-primary leading-tight">{p.name}</p>
-                          {health && (
-                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${HEALTH_DOT[health]}`} />
-                          )}
-                        </div>
-                        {p.city && <p className="mt-0.5 text-[10px] text-muted-foreground">{p.city}</p>}
-                        {p.progress > 0 && (
-                          <div className="mt-2">
-                            <div className="h-1 bg-muted"><div className="h-full bg-primary" style={{ width: `${p.progress}%` }} /></div>
-                            <p className="mt-1 text-[10px] text-muted-foreground">{p.progress}%</p>
-                          </div>
-                        )}
-                        {s.capital > 0 && (
-                          <div className="mt-2 grid grid-cols-2 gap-x-2 text-[10px]">
-                            <span className="text-muted-foreground">Capital</span>
-                            <span className="num text-right">{brlShort(s.capital)}</span>
-                            <span className="text-muted-foreground">Forecast</span>
-                            <span className="num text-right">{brlShort(s.forecast)}</span>
-                          </div>
-                        )}
-                      </Link>
-                    );
-                  })}
-                  {projects.length === 0 && (
-                    <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>
-                  )}
+                  {projects.map((p) => <ProjectCard key={p.id} p={p} data={data} />)}
+                  {projects.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
                 </div>
               </div>
             );

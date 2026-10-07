@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchPurchase, useCreatePurchase, useDeletePurchase, useCreateQuote, usePatchQuote, useDeleteQuote } from "@/lib/hooks/useAdminData";
@@ -723,9 +723,33 @@ function Compras() {
   const [filterProject, setFilterProject] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [openStages, setOpenStages] = useState<Set<string>>(new Set());
 
   const filtered = data.purchases.filter((p) => filterProject === "all" || p.projectId === filterProject);
   const selectedPurchase = selected ? data.purchases.find((p) => p.id === selected) ?? null : null;
+
+  function toggleStage(stage: string) {
+    setOpenStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(stage)) next.delete(stage); else next.add(stage);
+      return next;
+    });
+  }
+
+  function renderPurchaseCard(p: typeof filtered[number]) {
+    const proj = data.projects.find((x) => x.id === p.projectId);
+    return (
+      <button key={p.id} onClick={() => setSelected(p.id)}
+        className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
+        <p className="truncate text-sm font-semibold text-primary">{p.description}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{proj?.name}</p>
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <span>{p.quotes.length} cot.</span>
+          <span className="num">{brl(p.estimate)}</span>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <>
@@ -744,7 +768,36 @@ function Compras() {
         </button>
       </div>
 
-      <div className="overflow-x-auto pb-4">
+      {/* Mobile: collapsible stacked cards */}
+      <div className="sm:hidden space-y-1">
+        {STAGES.map((stage) => {
+          const cards = filtered.filter((p) => p.status === stage);
+          const isOpen = openStages.has(stage);
+          return (
+            <div key={stage} className="border">
+              <button
+                onClick={() => toggleStage(stage)}
+                className={cn("flex w-full items-center justify-between border-t-2 px-4 py-3 text-left", STAGE_COLOR[stage])}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage}</span>
+                  <span className="num font-display text-xl text-primary">{cards.length}</span>
+                </div>
+                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+              </button>
+              {isOpen && (
+                <div className="space-y-2 p-3">
+                  {cards.map((p) => renderPurchaseCard(p))}
+                  {cards.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: horizontal kanban */}
+      <div className="hidden sm:block overflow-x-auto pb-4">
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
             const cards = filtered.filter((p) => p.status === stage);
@@ -755,20 +808,7 @@ function Compras() {
                   <p className="num mt-1 font-display text-2xl text-primary">{cards.length}</p>
                 </div>
                 <div className="space-y-2">
-                  {cards.map((p) => {
-                    const proj = data.projects.find((x) => x.id === p.projectId);
-                    return (
-                      <button key={p.id} onClick={() => setSelected(p.id)}
-                        className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
-                        <p className="truncate text-sm font-semibold text-primary">{p.description}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{proj?.name}</p>
-                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{p.quotes.length} cot.</span>
-                          <span className="num">{brl(p.estimate)}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {cards.map((p) => renderPurchaseCard(p))}
                   {cards.length === 0 && <div className="border border-dashed p-3 text-center text-xs text-muted-foreground">—</div>}
                 </div>
               </div>
