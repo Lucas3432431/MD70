@@ -43,7 +43,8 @@ type MobileCategory = keyof typeof mobileCategories;
 function PatrimonioTicker({ overlay }: { overlay: boolean }) {
   const { data: aumData, isLoading } = usePublicAum();
   const value = usePatrimonioTicker(aumData?.aum_current ?? 0, {
-    animate: false,
+    animate: true,
+    animDurationMs: 1200,
     ratePerSecond: aumData?.rate_per_second,
   });
   return (
