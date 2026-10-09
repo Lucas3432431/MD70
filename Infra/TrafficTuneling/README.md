@@ -70,6 +70,7 @@ Entrar na máquina: `podman machine ssh`
 | Reiniciar o túnel | `podman restart md70_cloudflared` |
 | Logs do gateway | `podman logs -f md70_gateway_v1.0` |
 | Religar tudo sem build | `bash ~/MD70/Infra/services/scripts/boot_prod.sh` |
+| Mesmo fluxo do boot (pull + build + up), no Windows | `powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Trabalho\MD70\Infra\TrafficTuneling\boot_windows.ps1"` |
 | Deploy / atualizar | ver abaixo |
 
 ### Deploy de uma nova versão
@@ -111,7 +112,21 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
 
 - **Sem limites de CPU e memória.** Na máquina do Podman sobre WSL, os controladores de cgroup não são delegados ao usuário rootless (o processo fica em `/non-systemd/...`), e qualquer `deploy.resources.limits` falha com `crun: open memory.max`. Por isso `~/.config/containers/containers.conf` tem `cgroups = "disabled"`: os containers sobem, mas **os limites do compose são ignorados**. Rodar com root (`sudo podman`) aplicaria os limites, mas o `start_prod.sh` usa `podman unshare`, que exige rootless.
 - **Por que não o serviço do Windows?** O `cloudflared service install` no Windows foi testado e descartado. Com `--config` no `ImagePath`, o serviço encerra com `flag provided but not defined: -config`. Sem argumentos, lendo `systemprofile\.cloudflared\config.yml`, cai em loop sem logar o motivo. Rodar o conector como container junto do MD70 evita isso e não exige administrador.
-- **Reboot do Windows.** A tarefa agendada **"MD70 Boot"** (no logon do usuário, com 30s de atraso) roda [`boot_windows.ps1`](boot_windows.ps1). Ele liga a máquina do Podman, se precisar, e chama `Infra/services/scripts/boot_prod.sh`, que religa o túnel e os containers já criados, na ordem dos `depends_on` e esperando cada um ficar healthy. Não faz build. O log fica em `%LOCALAPPDATA%\md70-boot.log`. Como a máquina do Podman pertence ao usuário, **o MD70 só volta depois que alguém entra no Windows**: configure o login automático se o PC precisar se recuperar sozinho. Para recriar a tarefa:
+- **Reboot do Windows.** A tarefa agendada **"MD70 Boot"** (no logon do usuário, com 30s de atraso) roda [`boot_windows.ps1`](boot_windows.ps1), que **atualiza e faz o deploy a cada boot**:
+  1. liga a máquina do Podman, se precisar;
+  2. `git pull --ff-only` no clone do Windows (GitHub → Windows), com até 5 tentativas, porque a rede pode demorar a subir depois do logon;
+  3. na máquina: `git pull --ff-only` em `~/MD70` (Windows → máquina) e `start_prod.sh` (build das imagens + `up`);
+  4. `boot_prod.sh`: liga o túnel e espera cada container ficar healthy, na ordem dos `depends_on`.
+
+  Se o pull ou o build falharem, o passo 4 religa os containers que já existiam, e o site volta **na versão anterior** em vez de ficar fora do ar. Procure `AVISO:` no log para saber se isso aconteceu. O log fica em `%LOCALAPPDATA%\md70-boot.log`.
+
+  Cuidados:
+  - Como o build roda a cada boot, o site demora mais para voltar (vários minutos; o frontend sozinho pode levar até 10).
+  - O pull é `--ff-only`. Se o clone do Windows tiver commits locais não enviados ao GitHub, ou alterações não commitadas nos arquivos que o pull traz, o pull falha e o boot sobe a versão que já estava na máquina. Mantenha o clone do Windows limpo e sincronizado com o `origin`.
+  - O pull do Windows usa SSH (`git@github.com`) em `BatchMode`, sem prompt. A chave SSH precisa funcionar sem senha interativa (sem passphrase, ou carregada no `ssh-agent` do Windows).
+  - A máquina só pega o que estiver **commitado** no clone do Windows (o `origin` dela é esse clone).
+
+  Como a máquina do Podman pertence ao usuário, **o MD70 só volta depois que alguém entra no Windows**: configure o login automático se o PC precisar se recuperar sozinho (ver [Configuração do computador servidor](#configuração-do-computador-servidor)). Para recriar a tarefa:
   ```powershell
   $s = "$env:USERPROFILE\Trabalho\MD70\Infra\TrafficTuneling\boot_windows.ps1"
   $a = New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$s`""
@@ -120,6 +135,59 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
   ```
 
 - **Frontend self-hosted.** O `@lovable.dev/vite-tanstack-config` faz o build com o nitro no preset `cloudflare-module` (bundle de Worker), que não roda aqui. O `frontend/entrypoint.sh` de produção exporta `NITRO_PRESET=bun` e serve `.output/server/index.mjs`. Como o build roda no start do container, o frontend de prod não usa `read_only`.
+
+## Configuração do computador servidor
+
+O MD70 roda num PC Windows comum, então o Windows precisa ser configurado para ficar disponível 24/7. A regra geral: **a tela pode desligar, o computador nunca suspende.** O guia completo está em `Configuração de Energia — Servidor Windows 24-7.md`, na pasta `Trabalho` (fora do repositório).
+
+### Estado atual deste servidor (`DESKTOP-8BKD2TR`), conferido com `powercfg` em 07/10/2026
+
+| Configuração | Na tomada (AC) | Na bateria (DC) |
+|---|---|---|
+| Plano de energia | Equilibrado | Equilibrado |
+| Desligar tela | 10 min | 5 min |
+| Suspender | Nunca | Nunca |
+| Hibernar | Nunca | Nunca |
+| Desligar disco rígido | 0 (Nunca) | 0 (Nunca) |
+
+Outros itens:
+
+| Item | Estado | Observação |
+|---|---|---|
+| Tarefa agendada "MD70 Boot" | Ativa | Ver [Reboot do Windows](#limitações-conhecidas) |
+| Login automático (`AutoAdminLogon`) | **Desativado** | Sem ele, o MD70 só volta depois que alguém entra no Windows |
+| Horário ativo do Windows Update | 08h–17h | O Windows evita reiniciar nesse intervalo, mas pode reiniciar fora dele |
+| Inicialização Rápida (Fast Startup) | Ativada | Não atrapalha o boot do MD70; só afeta o desligamento completo |
+
+Para conferir:
+
+```powershell
+powercfg /q SCHEME_CURRENT SUB_SLEEP STANDBYIDLE     # suspender (0 = nunca)
+powercfg /q SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE   # hibernar  (0 = nunca)
+powercfg /q SCHEME_CURRENT SUB_DISK DISKIDLE         # disco     (0 = nunca)
+powercfg /q SCHEME_CURRENT SUB_VIDEO VIDEOIDLE       # tela, em segundos
+```
+
+Para aplicar em um servidor novo (como administrador):
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+powercfg /change disk-timeout-ac 0
+powercfg /change monitor-timeout-ac 10
+```
+
+### Checklist para um novo servidor
+
+- [ ] Suspensão e hibernação = Nunca; disco = 0 (Nunca); tela pode desligar
+- [ ] BIOS/UEFI: *Restore on AC Power Loss* (ou *After Power Failure*) = **Power On**, para o PC ligar sozinho quando a energia volta
+- [ ] Botões de energia e suspensão = Não fazer nada, para evitar desligamento acidental
+- [ ] Login automático do Windows configurado, porque sem ele a tarefa "MD70 Boot" não roda
+- [ ] Tarefa agendada "MD70 Boot" criada (comando em [Limitações conhecidas](#limitações-conhecidas))
+- [ ] Chave SSH do GitHub funcionando sem prompt (`git -C "$env:USERPROFILE\Trabalho\MD70" fetch`)
+- [ ] Horário ativo do Windows Update cobrindo o período de maior uso
+- [ ] Nobreak (UPS), se possível
+- [ ] Backup e monitoramento de disponibilidade de `https://md70.zera.tec.br`
 
 ## Segurança
 
