@@ -538,6 +538,20 @@ def validate_and_renew_token_for_new_chat(
         # Verificar se token e valido
         payload = auth_service.verify_token(access_token)
 
+        # Bypass para usuário anônimo (anon-admin-md70) — mapeia para admin real no DB
+        if not payload:
+            anon_payload = auth_service.verify_token(access_token, check_db=False)
+            if anon_payload and anon_payload.get("user_id") == "anon-admin-md70":
+                admin = DatabaseManager.fetch_one(
+                    "SELECT user_id FROM users WHERE role = :role LIMIT 1",
+                    {"role": "admin"},
+                )
+                if admin:
+                    debug(f"[NEW-CHAT] Anon admin mapeado para user real {admin.get('user_id')}")
+                    return admin.get("user_id"), None
+                # Sem admin no DB, deixar falhar na verificacao normal
+                return None, None
+
         if payload:
             # Token valido
             user_id = payload.get("user_id")
@@ -1312,34 +1326,36 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
                 status_code=401, content={"message": "ShowAgreementPopup"}
             )
 
-        # Obter plan_type (via user_id) - usar LEFT JOINs para suportar usuarios sem plano
-        query = """
-        SELECT COALESCE(p.plan_type, 'trial') as plan_type
-        FROM users u
-        LEFT JOIN clients c ON u.client_id = c.client_id
-        LEFT JOIN plans p ON c.plan_id = p.plan_id
-        WHERE u.user_id = :user_id
-        """
-        result = DatabaseManager.fetch_one(query, {"user_id": user_id})
-        if not result:
-            # Se usuario nao encontrado, usar trial como padrao
-            plan_type = "trial"
-            debug(
-                f"[POST /api/new-chat] Usuario {user_id} sem plano associado, usando 'trial'"
-            )
-        else:
-            plan_type = result.get("plan_type", "trial").lower()
+        # Anon admin bypassa verificacoes de plano/credito
+        if user_id != "anon-admin-md70":
+            # Obter plan_type (via user_id) - usar LEFT JOINs para suportar usuarios sem plano
+            query = """
+            SELECT COALESCE(p.plan_type, 'trial') as plan_type
+            FROM users u
+            LEFT JOIN clients c ON u.client_id = c.client_id
+            LEFT JOIN plans p ON c.plan_id = p.plan_id
+            WHERE u.user_id = :user_id
+            """
+            result = DatabaseManager.fetch_one(query, {"user_id": user_id})
+            if not result:
+                # Se usuario nao encontrado, usar trial como padrao
+                plan_type = "trial"
+                debug(
+                    f"[POST /api/new-chat] Usuario {user_id} sem plano associado, usando 'trial'"
+                )
+            else:
+                plan_type = result.get("plan_type", "trial").lower()
 
-        # Se for plan_type restrito (trial ou free), usar verificacao
-        if plan_type in ["trial", "free"]:
-            check_trial_plan_restrictions(user_id, "create_chat")
-        else:
-            # Para outros planos, verificar creditos disponiveis
-            has_credits, available_credits = CreditsManager.check_credits(
-                user_id, required_credits=1.0
-            )
-            if not has_credits:
-                raise HTTPException(status_code=402, detail="no fundings")
+            # Se for plan_type restrito (trial ou free), usar verificacao
+            if plan_type in ["trial", "free"]:
+                check_trial_plan_restrictions(user_id, "create_chat")
+            else:
+                # Para outros planos, verificar creditos disponiveis
+                has_credits, available_credits = CreditsManager.check_credits(
+                    user_id, required_credits=1.0
+                )
+                if not has_credits:
+                    raise HTTPException(status_code=402, detail="no fundings")
 
         # Validar entrada
         chat_name = (request_data.chat_name or "").strip()
@@ -1788,13 +1804,16 @@ def _process_chat_background(
 
             error(traceback.format_exc())
             job.mark_error(str(e))
+            _broadcast_job_status(chat_id, job.job_id, "error", str(e))
 
     except Exception as e:
         error(f"[BACKGROUND JOB {job.job_id}] Erro geral: {e}")
         job.mark_error(str(e))
+        _broadcast_job_status(chat_id, job.job_id, "error", str(e))
     finally:
         if not job.is_finished():
             job.mark_error("Background processing failed")
+            _broadcast_job_status(chat_id, job.job_id, "error", "Background processing failed")
 
 
 @chat_operations_router.post("/chat/{chat_id}/message", status_code=202)
@@ -1857,9 +1876,9 @@ async def send_message(
                 f"[POST /api/chat/{chat_id}/message] Attachment validado: {request_data.attachment.attachment_type}/{request_data.attachment.attachment_id}"
             )
 
-        # Obter user_id e plan_type para verificar creditos
+        # Obter user_id, role e plan_type para verificar creditos
         user_query = """
-        SELECT u.user_id, COALESCE(p.plan_type, 'trial') as plan_type
+        SELECT u.user_id, u.role, COALESCE(p.plan_type, 'trial') as plan_type
         FROM users u
         LEFT JOIN clients c ON u.client_id = c.client_id
         LEFT JOIN plans p ON c.plan_id = p.plan_id
@@ -1875,17 +1894,19 @@ async def send_message(
             f"[POST /api/chat/{chat_id}/message] Database query result - client_id: {client_id}, retrieved user_id: {user_id}, full result: {user_result}"
         )
         plan_type = user_result.get("plan_type", "trial").lower()
+        user_role = user_result.get("role", "")
 
-        # Verificar creditos disponiveis (via user_id)
-        has_credits, available_credits = CreditsManager.check_credits(
-            user_id, required_credits=1.0
-        )
-        if not has_credits:
-            # Se nao tem creditos, verificar se e trial/free ou nao
-            if plan_type in ["trial", "free"]:
-                raise HTTPException(status_code=402, detail="signup for more")
-            else:
-                raise HTTPException(status_code=402, detail="no fundings")
+        # Admin bypassa verificacao de creditos
+        if user_role != "admin":
+            has_credits, available_credits = CreditsManager.check_credits(
+                user_id, required_credits=1.0
+            )
+            if not has_credits:
+                # Se nao tem creditos, verificar se e trial/free ou nao
+                if plan_type in ["trial", "free"]:
+                    raise HTTPException(status_code=402, detail="signup for more")
+                else:
+                    raise HTTPException(status_code=402, detail="no fundings")
 
         agent_id = request_data.agent_id or "orchestrator-global"
 

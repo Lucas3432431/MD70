@@ -121,9 +121,10 @@ function EditForm({ project, onClose }: { project: AdminProject; onClose: () => 
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium">Orçamento (R$)</label>
+            <label className="block text-sm font-medium">Forecast (R$)</label>
             <input type="number" min="0" step="1000" value={form.budget} onChange={(e) => set("budget", e.target.value)}
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+            <p className="mt-1 text-xs text-muted-foreground">Estimativa inicial no começo da obra.</p>
           </div>
           <div>
             <label className="block text-sm font-medium">Previsão de conclusão</label>
@@ -166,7 +167,7 @@ function BudgetRow({
   const [remainingVal, setRemainingVal] = useState(String(b.remaining));
 
   const forecast = realized + committed + (parseFloat(remainingVal) || b.remaining);
-  const saldo = (parseFloat(plannedVal) || b.planned) - forecast;
+  const saldo = forecast - realized;
 
   function savePlanned() {
     const v = parseFloat(plannedVal);
@@ -193,26 +194,7 @@ function BudgetRow({
   return (
     <tr className="border-t">
       <td className="p-3 font-medium">{b.category} / {b.item}</td>
-      {/* Orçado — editable */}
-      <td className="num p-3">
-        {editPlanned ? (
-          <div className="flex items-center gap-1">
-            <input type="number" autoFocus value={plannedVal} onChange={(e) => setPlannedVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") savePlanned(); if (e.key === "Escape") setEditPlanned(false); }}
-              className="w-28 border bg-background px-2 py-1 text-xs" />
-            <button onClick={savePlanned} className="text-positive"><Check className="size-3.5" /></button>
-          </div>
-        ) : (
-          <button onClick={() => setEditPlanned(true)} className="hover:text-primary hover:underline">
-            {brl(parseFloat(plannedVal) || b.planned)}
-          </button>
-        )}
-      </td>
-      {/* Realizado — computed */}
-      <td className="num p-3">{brl(realized)}</td>
-      {/* Comprometido — computed */}
-      <td className="num p-3">{brl(committed)}</td>
-      {/* Forecast = realizado + comprometido + restante — restante editable */}
+      {/* Projeção = realizado + comprometido + restante — restante editable */}
       <td className="num p-3">
         {editRemaining ? (
           <div className="flex items-center gap-1">
@@ -227,8 +209,27 @@ function BudgetRow({
           </button>
         )}
       </td>
-      {/* Saldo */}
-      <td className={cn("num p-3", saldo < 0 ? "text-destructive" : "")}>{brl(saldo)}</td>
+      {/* Orçamento — editable */}
+      <td className="num p-3">
+        {editPlanned ? (
+          <div className="flex items-center gap-1">
+            <input type="number" autoFocus value={plannedVal} onChange={(e) => setPlannedVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") savePlanned(); if (e.key === "Escape") setEditPlanned(false); }}
+              className="w-28 border bg-background px-2 py-1 text-xs" />
+            <button onClick={savePlanned} className="text-positive"><Check className="size-3.5" /></button>
+          </div>
+        ) : (
+          <button onClick={() => setEditPlanned(true)} className="hover:text-primary hover:underline">
+            {brl(parseFloat(plannedVal) || b.planned)}
+          </button>
+        )}
+      </td>
+      {/* Comprometido — computed */}
+      <td className="num p-3">{brl(committed)}</td>
+      {/* Realizado — computed */}
+      <td className="num p-3">{brl(realized)}</td>
+      {/* Saldo = Projeção − Realizado */}
+      <td className={cn("num p-3", saldo < 0 ? "text-destructive" : saldo > 0 ? "text-positive" : "")}>{brl(saldo)}</td>
     </tr>
   );
 }
@@ -427,7 +428,7 @@ function Detail() {
     realized: sum(budgetRows.map((r) => r.realizedCalc)),
     committed: sum(budgetRows.map((r) => r.committedCalc)),
     forecast: sum(budgetRows.map((r) => r.forecastCalc)),
-    saldo: sum(budgetRows.map((r) => r.planned - r.forecastCalc)),
+    saldo: sum(budgetRows.map((r) => r.forecastCalc - r.realizedCalc)),
   }), [budgetRows]);
 
   const financialPct = totals.planned > 0 ? Math.min(100, Math.round((totals.realized / totals.planned) * 100)) : 0;
@@ -465,16 +466,17 @@ function Detail() {
       {/* KPI cards — forecast from budget sum */}
       <section className="mt-6 grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
         {([
-          ["Capital aportado", s.capital],
-          ["Caixa disponível", s.cash],
-          ["Orçamento", totals.planned],
-          ["Realizado", totals.realized],
-          ["Forecast", totals.forecast],
-          ["Saldo Forecast", totals.planned - totals.forecast],
-        ] as [string, number][]).map(([l, v]) => (
+          ["Capital aportado", s.capital, null],
+          ["Caixa disponível", s.cash, null],
+          ...(project.budget > 0 ? [["Forecast", project.budget, null] as [string, number, null]] : []),
+          ["Orçamento", totals.planned, null],
+          ["Realizado", totals.realized, null],
+          ["Projeção", totals.forecast, null],
+          ["Saldo", totals.forecast - totals.realized, totals.forecast - totals.realized],
+        ] as [string, number, number | null][]).map(([l, v, colorVal]) => (
           <div key={l} className="bg-card p-5">
             <p className="text-xs text-muted-foreground">{l}</p>
-            <p className="num mt-2 font-display text-2xl text-primary">{brl(v)}</p>
+            <p className={cn("num mt-2 font-display text-2xl", colorVal !== null ? (colorVal >= 0 ? "text-positive" : "text-destructive") : "text-primary")}>{brl(v)}</p>
           </div>
         ))}
         {project.vgv != null && project.vgv > 0 && (
@@ -572,12 +574,12 @@ function Detail() {
                   <p className="text-sm text-muted-foreground">Nenhuma linha orçamentária.</p>
                 ) : (
                   <>
-                    <p className="mb-3 text-xs text-muted-foreground">Clique em Orçado ou Forecast para editar. Realizado e Comprometido são calculados do financeiro.</p>
+                    <p className="mb-3 text-xs text-muted-foreground">Clique em Orçamento ou Forecast para editar. Realizado e Comprometido são calculados do financeiro.</p>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[650px] text-sm">
                         <thead>
                           <tr className="bg-muted text-left text-xs text-muted-foreground">
-                            {["Categoria / item", "Orçado", "Realizado", "Comprometido", "Forecast", "Saldo"].map((h) => (
+                            {["Categoria / item", "Projeção", "Orçamento", "Comprometido", "Realizado", "Saldo"].map((h) => (
                               <th key={h} className="p-3">{h}</th>
                             ))}
                           </tr>
@@ -593,8 +595,8 @@ function Detail() {
                           ))}
                           <tr className="border-t-2 bg-muted/40 font-semibold">
                             <td className="p-3">Total</td>
-                            {[totals.planned, totals.realized, totals.committed, totals.forecast, totals.saldo].map((v, i) => (
-                              <td key={i} className={cn("num p-3", i === 4 && v < 0 ? "text-destructive" : "")}>{brl(v)}</td>
+                            {[totals.forecast, totals.planned, totals.committed, totals.realized, totals.saldo].map((v, i) => (
+                              <td key={i} className={cn("num p-3", i === 4 ? (v < 0 ? "text-destructive" : v > 0 ? "text-positive" : "") : "")}>{brl(v)}</td>
                             ))}
                           </tr>
                         </tbody>

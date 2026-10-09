@@ -14,6 +14,7 @@ from App.Core.Crunch.TablesSQL.Database import database
 from App.Core.Logs import info, error
 
 router = APIRouter(prefix="/api/portal-admin", tags=["admin-md70"])
+public_router = APIRouter(prefix="/api/public", tags=["public-md70"])
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +187,8 @@ async def get_admin_data():
                     "projectInterests": project_interests,
                 })
 
+        with engine.connect() as aum_conn:
+            aum_data = _calc_aum(aum_conn)
         return {
             "minQuotes": 2,
             "projects": projects,
@@ -194,6 +197,8 @@ async def get_admin_data():
             "purchases": purchases_list,
             "movements": movements_list,
             "leads": leads,
+            "aumCurrent": aum_data["aum_current"],
+            "aumRatePerSecond": aum_data["rate_per_second"],
         }
 
     except Exception as exc:
@@ -882,3 +887,53 @@ async def delete_quote(quote_id: str):
     except Exception as exc:
         error(f"[AdminRoutes] DELETE /quotes/{quote_id} error: {exc}")
         raise HTTPException(status_code=500, detail="Erro interno ao deletar cotação.")
+
+
+# ---------------------------------------------------------------------------
+# AUM helpers — shared between admin and public endpoints
+# ---------------------------------------------------------------------------
+
+_CDI_MONTHLY_RATE = 0.01          # 1 % a.m.
+_SECONDS_PER_MONTH = 30.44 * 24 * 3600  # ≈ 2,630,016
+
+
+def _calc_aum(conn) -> dict:
+    """
+    Returns base AUM (Capital Realizado movements) plus CDI accrued since the
+    first second of the current calendar month.
+    """
+    from datetime import datetime, timezone
+
+    row = conn.execute(text(
+        "SELECT COALESCE(SUM(CASE WHEN direction = 'Entrada' THEN value ELSE -value END), 0) AS aum "
+        "FROM md70_movements WHERE status = 'Realizado' AND category = 'Capital'"
+    )).fetchone()
+    base_aum = float(row[0]) if row else 0.0
+
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elapsed_seconds = (now - month_start).total_seconds()
+
+    rate_per_second = base_aum * _CDI_MONTHLY_RATE / _SECONDS_PER_MONTH
+    aum_current = base_aum + rate_per_second * elapsed_seconds
+
+    return {
+        "aum": base_aum,
+        "aum_current": aum_current,
+        "rate_per_second": rate_per_second,
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/public/aum — patrimônio sob gestão (public, no auth required)
+# ---------------------------------------------------------------------------
+
+@public_router.get("/aum")
+async def get_public_aum():
+    engine = database.engine
+    try:
+        with engine.connect() as conn:
+            return _calc_aum(conn)
+    except Exception as exc:
+        error(f"[PublicRoutes] GET /aum error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno.")

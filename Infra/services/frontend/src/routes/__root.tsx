@@ -8,11 +8,16 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, lazy, Suspense, type ReactNode } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+
+// Lazy-loaded so cobe (WebGL) is never imported during SSR
+const LoadingScreen = lazy(() =>
+  import("@/components/LoadingScreen").then((m) => ({ default: m.LoadingScreen })),
+);
 
 const GOOGLE_CLIENT_ID = "689898587679-6o0ift72p70ri1p99snmld9oab1jtg2j.apps.googleusercontent.com";
 
@@ -136,6 +141,7 @@ function RootComponent() {
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <QueryClientProvider client={queryClient}>
+        <Suspense fallback={null}><LoadingScreen /></Suspense>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
         <Toaster richColors position="top-right" />

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ListFilter } from "lucide-react";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { PrevistVsRealizadoChart, type Period, periodKey, periodWindowFilter } from "@/components/admin/PrevistVsRealizadoChart";
 import { brl } from "@/lib/format";
@@ -21,10 +21,6 @@ export const Route = createFileRoute("/_authenticated/admin/relatorios")({
 });
 
 const PIE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
-
-function originLabel(description: string): string {
-  return description.includes(" — ") ? description.split(" — ")[0]! : description;
-}
 
 function CategoryDropdown({
   categories,
@@ -86,17 +82,20 @@ function CategoryDropdown({
 
 interface DonutChartProps {
   data: { name: string; value: number }[];
+  hidden: Set<string>;
 }
 
-function DonutChart({ data }: DonutChartProps) {
-  const total = data.reduce((s, d) => s + d.value, 0);
+function DonutChart({ data, hidden }: DonutChartProps) {
+  const visible = data.filter((d) => !hidden.has(d.name));
+  const visibleTotal = visible.reduce((s, d) => s + d.value, 0);
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2">
       <div className="h-[80px] w-[80px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={visible}
               dataKey="value"
               nameKey="name"
               cx="50%"
@@ -106,11 +105,14 @@ function DonutChart({ data }: DonutChartProps) {
               focusable={false}
               style={{ outline: "none" }}
             >
-              {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} style={{ outline: "none" }} />)}
+              {visible.map((entry) => {
+                const origIdx = data.findIndex((d) => d.name === entry.name);
+                return <Cell key={entry.name} fill={PIE_COLORS[origIdx % PIE_COLORS.length]} style={{ outline: "none" }} />;
+              })}
             </Pie>
             <Tooltip
               formatter={(v: number, _name: string, props: { payload?: { name: string; value: number } }) => {
-                const pct = total > 0 ? ((props.payload?.value ?? 0) / total * 100).toFixed(1) : "0";
+                const pct = visibleTotal > 0 ? ((props.payload?.value ?? 0) / visibleTotal * 100).toFixed(1) : "0";
                 return [`${brl(v)} (${pct}%)`, props.payload?.name ?? ""];
               }}
               contentStyle={{ fontSize: 12 }}
@@ -120,7 +122,7 @@ function DonutChart({ data }: DonutChartProps) {
       </div>
       <ul className="min-w-0 flex-1" style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 10, lineHeight: "1.7" }}>
         {data.map((entry, i) => (
-          <li key={i} style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+          <li key={i} style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden", opacity: hidden.has(entry.name) ? 0.35 : 1 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0, display: "inline-block" }} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0, color: "#000" }}>{entry.name}</span>
             <span style={{ whiteSpace: "nowrap", flexShrink: 0, color: "#000" }}>· {brl(entry.value)}</span>
@@ -135,6 +137,18 @@ function Relatorios() {
   const { data } = useAdmin();
   const [period, setPeriod] = useState<Period>("year");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [donutMode, setDonutMode] = useState<"categoria" | "origem" | "tipo">("categoria");
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const allCategories = useMemo(
     () => Array.from(new Set(data.movements.map((m) => m.category))).sort(),
@@ -170,26 +184,42 @@ function Relatorios() {
   const forecastSaidas = useMemo(() => sum(forecastMvs.filter((m) => m.direction === "Saída").map((m) => m.value)), [forecastMvs]);
   const hasForecast = forecastEntradas > 0 || forecastSaidas > 0;
 
-  const entradasByOrigem = useMemo(() => {
+  const entradasDonut = useMemo(() => {
     const map = new Map<string, number>();
     for (const m of realized.filter((m) => m.direction === "Entrada")) {
-      const key = originLabel(m.description);
+      const key = donutMode === "origem"
+        ? (m.description.includes(" — ") ? m.description.split(" — ")[0]! : m.description)
+        : donutMode === "tipo" ? (m.obraType ?? m.category) : m.category;
       map.set(key, (map.get(key) ?? 0) + m.value);
     }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value]) => ({ name, value }));
-  }, [realized]);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+  }, [realized, donutMode]);
 
-  const saidasByCategory = useMemo(() => {
+  const saidasDonut = useMemo(() => {
     const map = new Map<string, number>();
     for (const m of realized.filter((m) => m.direction === "Saída")) {
-      map.set(m.category, (map.get(m.category) ?? 0) + m.value);
+      const key = donutMode === "origem"
+        ? (m.description.includes(" — ") ? m.description.split(" — ")[0]! : m.description)
+        : donutMode === "tipo" ? (m.obraType ?? m.category) : m.category;
+      map.set(key, (map.get(key) ?? 0) + m.value);
     }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value]) => ({ name, value }));
-  }, [realized]);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+  }, [realized, donutMode]);
+
+  const allDonutKeys = useMemo(() => {
+    const keys = new Set([...entradasDonut.map((d) => d.name), ...saidasDonut.map((d) => d.name)]);
+    return Array.from(keys);
+  }, [entradasDonut, saidasDonut]);
+
+  useEffect(() => { setHiddenKeys(new Set()); }, [donutMode]);
+
+  function toggleKey(key: string) {
+    setHiddenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
 
   const PERIODS: { key: Period; label: string }[] = [
     { key: "year", label: "Ano" },
@@ -202,7 +232,7 @@ function Relatorios() {
       <AdminHeading title="Relatórios">Visão consolidada financeira e operacional dos empreendimentos.</AdminHeading>
 
       {/* ── Filtros globais ─────────────────────────────────────────── */}
-      <div className="mb-6 flex flex-wrap items-center gap-4 text-sm">
+      <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
         <div className="flex rounded border">
           {PERIODS.map(({ key, label }) => (
             <button key={key} onClick={() => setPeriod(key)}
@@ -279,32 +309,93 @@ function Relatorios() {
       )}
 
       {/* ── Donut charts ────────────────────────────────────────────── */}
-      <div className="mt-10 grid grid-cols-2 gap-2">
-        <section className="h-full">
-          {entradasByOrigem.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma entrada registrada.</p>
-          ) : (
-            <div className="flex h-full flex-col border bg-card p-2">
-              <h2 className="mb-2 truncate font-display text-sm text-primary">Entradas por origem</h2>
-              <div className="flex flex-1 items-center">
-                <DonutChart data={entradasByOrigem} />
+      <div className="mt-8">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Agrupar por</span>
+          <select
+            value={donutMode}
+            onChange={(e) => setDonutMode(e.target.value as "categoria" | "origem" | "tipo")}
+            className="border bg-background px-2 py-1 text-sm"
+          >
+            <option value="categoria">Categoria</option>
+            <option value="origem">Origem</option>
+            <option value="tipo">MO / Mat.</option>
+          </select>
+          <div className="relative" ref={filterRef}>
+            <button
+              onClick={() => setFilterOpen((v) => !v)}
+              className={cn(
+                "flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors hover:bg-muted",
+                (filterOpen || hiddenKeys.size > 0) && "border-primary text-primary",
+              )}
+              title="Filtrar itens"
+            >
+              <ListFilter className="size-3.5" />
+              {hiddenKeys.size > 0 && <span>{allDonutKeys.length - hiddenKeys.size}/{allDonutKeys.length}</span>}
+            </button>
+            {filterOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] border bg-card shadow-md">
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                  <span className="text-xs font-medium text-muted-foreground">Filtrar itens</span>
+                  <button
+                    onClick={() => setHiddenKeys(new Set())}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Limpar
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 divide-x">
+                  {([
+                    { label: "Entradas", items: entradasDonut },
+                    { label: "Saídas",   items: saidasDonut },
+                  ] as const).map(({ label, items }) => (
+                    <div key={label} className="max-h-60 overflow-y-auto">
+                      <p className="sticky top-0 bg-card px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b">{label}</p>
+                      {items.map(({ name }) => (
+                        <label key={name} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={!hiddenKeys.has(name)}
+                            onChange={() => toggleKey(name)}
+                            className="rounded"
+                          />
+                          <span className={cn("flex-1 truncate", hiddenKeys.has(name) && "text-muted-foreground line-through")}>{name}</span>
+                        </label>
+                      ))}
+                      {items.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">—</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
-
-        <section className="h-full">
-          {saidasByCategory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma saída registrada.</p>
-          ) : (
-            <div className="flex h-full flex-col border bg-card p-2">
-              <h2 className="mb-2 truncate font-display text-sm text-primary">Saídas por categoria</h2>
-              <div className="flex flex-1 items-center">
-                <DonutChart data={saidasByCategory} />
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <section>
+            {entradasDonut.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma entrada.</p>
+            ) : (
+              <div className="flex h-full flex-col border bg-card p-2">
+                <h2 className="mb-2 truncate font-display text-sm text-primary">Entradas</h2>
+                <div className="flex flex-1 items-center">
+                  <DonutChart data={entradasDonut} hidden={hiddenKeys} />
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+          <section>
+            {saidasDonut.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma saída.</p>
+            ) : (
+              <div className="flex h-full flex-col border bg-card p-2">
+                <h2 className="mb-2 truncate font-display text-sm text-primary">Saídas</h2>
+                <div className="flex flex-1 items-center">
+                  <DonutChart data={saidasDonut} hidden={hiddenKeys} />
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
       {/* ── Evolução temporal ───────────────────────────────────────── */}

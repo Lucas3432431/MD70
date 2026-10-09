@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, X, ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, X, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
@@ -133,9 +133,10 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="0" />
           </div>
           <div>
-            <label className="block text-sm font-medium">Orçamento (R$)</label>
+            <label className="block text-sm font-medium">Forecast (R$)</label>
             <input type="number" min="0" step="1000" value={form.budget} onChange={(e) => set("budget", e.target.value)}
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="0" />
+            <p className="mt-1 text-xs text-muted-foreground">Estimativa inicial no começo da obra.</p>
           </div>
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium">URL da imagem</label>
@@ -186,7 +187,7 @@ function ProjectCard({ p, data }: { p: ReturnType<typeof useAdmin>["data"]["proj
         <div className="mt-2 grid grid-cols-2 gap-x-2 text-[10px]">
           <span className="text-muted-foreground">Capital</span>
           <span className="num text-right">{brlShort(s.capital)}</span>
-          <span className="text-muted-foreground">Forecast</span>
+          <span className="text-muted-foreground">VGV</span>
           <span className="num text-right">{brlShort(s.forecast)}</span>
         </div>
       )}
@@ -198,6 +199,12 @@ function AdminProjects() {
   const { data } = useAdmin();
   const [showNew, setShowNew] = useState(false);
   const [openStages, setOpenStages] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+
+  const visibleProjects = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return q ? data.projects.filter(p => p.name.toLowerCase().includes(q) || (p.city ?? "").toLowerCase().includes(q)) : data.projects;
+  }, [data.projects, search]);
 
   function toggleStage(stage: string) {
     setOpenStages((prev) => {
@@ -211,7 +218,16 @@ function AdminProjects() {
     <>
       <AdminHeading title="Empreendimentos">Pipeline de projetos — do primeiro contato à venda.</AdminHeading>
 
-      <div className="mb-5 flex justify-end">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar empreendimento..."
+            className="border bg-background pl-8 pr-3 py-2 text-sm w-52 sm:w-64"
+          />
+        </div>
         <button
           onClick={() => setShowNew(true)}
           className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
@@ -223,7 +239,7 @@ function AdminProjects() {
       {/* Mobile: collapsible stacked cards */}
       <div className="sm:hidden space-y-1">
         {STAGES.map((stage) => {
-          const projects = data.projects.filter((p) => p.status === stage);
+          const projects = visibleProjects.filter((p) => p.status === stage);
           const isOpen = openStages.has(stage);
           return (
             <div key={stage} className="border">
@@ -252,7 +268,7 @@ function AdminProjects() {
       <div className="hidden sm:block overflow-x-auto pb-4">
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
-            const projects = data.projects.filter((p) => p.status === stage);
+            const projects = visibleProjects.filter((p) => p.status === stage);
             return (
               <div key={stage} className="flex w-52 shrink-0 flex-col">
                 <div className={`mb-3 border-t-2 pt-3 ${STAGE_COLOR[stage]}`}>

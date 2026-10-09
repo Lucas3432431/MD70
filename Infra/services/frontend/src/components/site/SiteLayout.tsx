@@ -4,6 +4,9 @@ import { BookOpen, Compass, House, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
+import { usePatrimonioTicker } from "@/lib/hooks/usePatrimonioTicker";
+import { usePublicAum } from "@/lib/hooks/usePublicAum";
+import { brl } from "@/lib/format";
 
 const nav = [
   { to: "/sobre", label: "Sobre" },
@@ -37,6 +40,24 @@ const mobileCategories = {
 
 type MobileCategory = keyof typeof mobileCategories;
 
+function PatrimonioTicker({ overlay }: { overlay: boolean }) {
+  const { data: aumData, isLoading } = usePublicAum();
+  const value = usePatrimonioTicker(aumData?.aum_current ?? 0, {
+    animate: false,
+    ratePerSecond: aumData?.rate_per_second,
+  });
+  return (
+    <div className={cn("flex flex-col items-end leading-none", overlay ? "text-primary-foreground" : "text-primary")}>
+      <span className="text-[0.55rem] uppercase tracking-[0.18em] opacity-50">sob gestão</span>
+      {isLoading ? (
+        <div className="mt-0.5 h-4 w-24 rounded bg-current opacity-10 animate-pulse" />
+      ) : (
+        <span className="num text-sm font-semibold tabular-nums mt-0.5">{brl(value)}</span>
+      )}
+    </div>
+  );
+}
+
 export function SiteLayout({ children, overlay = false }: { children: ReactNode; overlay?: boolean }) {
   const [open, setOpen] = useState<MobileCategory | null>(null);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -49,14 +70,17 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
     return () => window.removeEventListener("keydown", onEscape);
   }, [open]);
   const linkClass = (active: boolean) => cn(
-    "flex min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-0.5 text-center text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-32 md:shrink-0 md:text-xs",
-    active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+    "flex min-w-0 items-center justify-center px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-14 md:shrink-0",
+    active ? "text-primary" : "text-muted-foreground hover:text-foreground",
   );
   return (
-    <div className="min-h-screen flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
+    <div className="min-h-screen flex flex-col pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <header className={cn("z-30 w-full", overlay ? "absolute top-0 text-primary-foreground" : "border-b bg-background text-primary")}>
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-          <Link to="/" aria-label="MD70 — início"><Logo /></Link>
+          <div className="flex items-center gap-6">
+            <Link to="/" aria-label="MD70 — início"><Logo /></Link>
+            <PatrimonioTicker overlay={overlay} />
+          </div>
           <nav className="hidden">
             {nav.map((n) => (
               <Link key={n.to} to={n.to} className="text-[0.8rem] tracking-wide opacity-80 transition-opacity hover:opacity-100" activeProps={{ className: "opacity-100 underline underline-offset-8" }}>
@@ -100,7 +124,7 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
       {open && (
         <>
           <Button variant="ghost" className="fixed inset-0 z-30 h-auto rounded-none bg-ink/30 hover:bg-ink/30" aria-label="Fechar navegação" onClick={() => setOpen(null)} />
-          <div id={`site-category-${open}`} aria-label={mobileCategories[open].label} className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-background px-6 py-4 shadow-soft">
+          <div id={`site-category-${open}`} aria-label={mobileCategories[open].label} className="fixed inset-x-0 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-40 border-t bg-background px-6 py-4 shadow-soft">
             <p className="eyebrow mb-2">{mobileCategories[open].label}</p>
             {mobileCategories[open].links.map(({ to, label }) => (
               <Link key={to} to={to} onClick={() => setOpen(null)} aria-current={pathname === to ? "page" : undefined} className={cn("block border-b py-3 text-sm text-foreground last:border-0", pathname === to && "font-semibold text-primary")}>{label}</Link>
@@ -108,26 +132,26 @@ export function SiteLayout({ children, overlay = false }: { children: ReactNode;
           </div>
         </>
       )}
-      <nav aria-label="Navegação institucional" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-soft backdrop-blur">
-        <div className="mx-auto grid h-16 grid-cols-5 px-1 md:flex md:h-[4.5rem] md:items-stretch md:justify-center md:gap-1 md:px-8">
-          <Link to="/" onClick={() => setOpen(null)} aria-current={pathname === "/" ? "page" : undefined} className={linkClass(pathname === "/")}>
-            <House className="size-5 shrink-0" aria-hidden="true" /><span>Início</span>
+      <nav aria-label="Navegação institucional" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+        <div className="mx-auto flex h-10 items-stretch justify-center md:h-10 md:gap-0.5">
+          <Link to="/" onClick={() => setOpen(null)} aria-label="Início" aria-current={pathname === "/" ? "page" : undefined} className={linkClass(pathname === "/")}>
+            <House className="size-3.5 shrink-0" aria-hidden="true" />
           </Link>
           {(Object.keys(mobileCategories) as MobileCategory[]).map((key) => {
             const category = mobileCategories[key];
             const Icon = category.icon;
             const active = open === key || category.links.some(({ to }) => pathname === to);
             return (
-              <Button key={key} variant="ghost" aria-expanded={open === key} aria-controls={`site-category-${key}`} onClick={() => setOpen(open === key ? null : key)} className={cn("h-16 min-w-0 flex-col gap-1 rounded-none border-t-2 px-0.5 text-[10px] font-normal md:h-[4.5rem] md:w-32 md:shrink-0 md:text-xs", active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>
-                <Icon className="size-5 shrink-0" aria-hidden="true" /><span>{category.label}</span>
+              <Button key={key} variant="ghost" aria-expanded={open === key} aria-controls={`site-category-${key}`} aria-label={category.label} onClick={() => setOpen(open === key ? null : key)} className={cn("h-10 min-w-0 items-center justify-center rounded-none px-2 font-normal md:h-10 md:w-14 md:shrink-0", active ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-transparent")}>
+                <Icon className="size-3.5 shrink-0" aria-hidden="true" />
               </Button>
             );
           })}
-          <Link to="/contato" onClick={() => setOpen(null)} aria-current={pathname === "/contato" ? "page" : undefined} className={linkClass(pathname === "/contato")}>
-            <span className="flex size-5 shrink-0 items-center justify-center text-lg leading-none" aria-hidden="true">@</span><span>Contato</span>
+          <Link to="/contato" onClick={() => setOpen(null)} aria-label="Contato" aria-current={pathname === "/contato" ? "page" : undefined} className={linkClass(pathname === "/contato")}>
+            <span className="flex size-3.5 shrink-0 items-center justify-center text-sm leading-none" aria-hidden="true">@</span>
           </Link>
           <Link to="/portal" onClick={() => setOpen(null)} aria-label="Portal do investidor" aria-current={pathname.startsWith("/portal") ? "page" : undefined} className={linkClass(pathname.startsWith("/portal"))}>
-            <UserRound className="size-5 shrink-0" aria-hidden="true" /><span className="leading-tight">Portal do<br />investidor</span>
+            <UserRound className="size-3.5 shrink-0" aria-hidden="true" />
           </Link>
         </div>
       </nav>

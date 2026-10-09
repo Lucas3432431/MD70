@@ -1,9 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import hero from "@/assets/hero-city.jpg";
 import { SiteLayout, InvestCta } from "@/components/site/SiteLayout";
 import { Button } from "@/components/ui/button";
 import { steps } from "@/lib/data/site";
 import { developments } from "@/lib/data/developments";
+
+const GlobePin = lazy(() =>
+  import("@/components/GlobePin").then((m) => ({ default: m.GlobePin })),
+);
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,6 +28,12 @@ function Home() {
       <section className="relative min-h-[92vh] overflow-hidden bg-ink text-primary-foreground">
         <img src={hero} alt="Vista aérea da cidade em preto e branco" width={1600} height={1200} className="photo absolute inset-0 h-full w-full object-cover opacity-70" />
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-ink/30" />
+        {/* Globe — centered on mobile, right-clipped on desktop */}
+        <div className="absolute left-1/2 top-[12%] -translate-x-1/2 select-none opacity-40 md:left-auto md:right-0 md:top-1/2 md:-translate-x-0 md:-translate-y-1/2 md:opacity-30">
+          <Suspense fallback={null}><GlobePin size={typeof window !== "undefined" && window.innerWidth < 768 ? 360 : 560} dark /></Suspense>
+        </div>
+        {/* Gradient reinforcement at bottom so text stays legible over globe on mobile */}
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink via-ink/70 to-transparent md:hidden" />
         <div className="relative mx-auto flex min-h-[92vh] max-w-7xl flex-col justify-end px-6 pb-20 pt-32">
           <p className="eyebrow !text-primary-foreground/70 fade-up">MD70 Imóveis e Negócios</p>
           <h1 className="mt-6 max-w-4xl font-display text-5xl leading-[1] md:text-8xl fade-up">

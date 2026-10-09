@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
-import { FileText, Plus, Trash2, X } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { FileText, Plus, Trash2, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { useCreateMovement, usePatchMovement, useDeleteMovement } from "@/lib/hooks/useAdminData";
@@ -33,6 +33,106 @@ function originLabel(description: string): string {
   return description.includes(" — ") ? description.split(" — ")[0]! : description;
 }
 
+// ─── Recipient autocomplete ───────────────────────────────────────────────────
+
+interface Recipient { name: string; cnpj: string }
+
+function useRecipients(): Recipient[] {
+  const { data } = useAdmin();
+  return useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const m of data.movements) {
+      const name = m.recipientName?.trim() ?? "";
+      const cnpj = m.cnpj?.trim() ?? "";
+      if (name && !seen.has(name)) seen.set(name, cnpj);
+    }
+    return Array.from(seen.entries()).map(([name, cnpj]) => ({ name, cnpj }));
+  }, [data.movements]);
+}
+
+function RecipientFields({
+  name,
+  cnpj,
+  onName,
+  onCnpj,
+  recipients,
+}: {
+  name: string;
+  cnpj: string;
+  onName: (v: string) => void;
+  onCnpj: (v: string) => void;
+  recipients: Recipient[];
+}) {
+  const [nameSuggestions, setNameSuggestions] = useState<Recipient[]>([]);
+  const [cnpjSuggestions, setCnpjSuggestions] = useState<Recipient[]>([]);
+  const nameRef = useRef<HTMLDivElement>(null);
+  const cnpjRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (nameRef.current && !nameRef.current.contains(e.target as Node)) setNameSuggestions([]);
+      if (cnpjRef.current && !cnpjRef.current.contains(e.target as Node)) setCnpjSuggestions([]);
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  function onNameChange(v: string) {
+    onName(v);
+    const q = v.trim().toLowerCase();
+    setNameSuggestions(q.length < 1 ? [] : recipients.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 10));
+  }
+  function onCnpjChange(v: string) {
+    onCnpj(v);
+    const q = v.trim().toLowerCase();
+    setCnpjSuggestions(q.length < 1 ? [] : recipients.filter((r) => r.cnpj.toLowerCase().includes(q)).slice(0, 10));
+  }
+  function pickName(r: Recipient) { onName(r.name); onCnpj(r.cnpj); setNameSuggestions([]); }
+  function pickCnpj(r: Recipient) { onCnpj(r.cnpj); onName(r.name); setCnpjSuggestions([]); }
+
+  return (
+    <>
+      <div className="relative" ref={cnpjRef}>
+        <label className="block text-xs text-muted-foreground">CNPJ / CPF</label>
+        <input value={cnpj} onChange={(e) => onCnpjChange(e.target.value)} maxLength={18}
+          placeholder="00.000.000/0000-00"
+          className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
+        {cnpjSuggestions.length > 0 && (
+          <ul className="absolute left-0 top-full z-50 w-full border bg-card shadow-md text-sm">
+            {cnpjSuggestions.map((r, i) => (
+              <li key={i}>
+                <button type="button" onMouseDown={() => pickCnpj(r)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted">
+                  <span className="truncate font-mono">{r.cnpj}</span>
+                  {r.name && <span className="shrink-0 truncate text-xs text-muted-foreground max-w-[120px]">{r.name}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="relative" ref={nameRef}>
+        <label className="block text-xs text-muted-foreground">Nome / Razão social</label>
+        <input value={name} onChange={(e) => onNameChange(e.target.value)} maxLength={200}
+          className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
+        {nameSuggestions.length > 0 && (
+          <ul className="absolute left-0 top-full z-50 w-full border bg-card shadow-md text-sm">
+            {nameSuggestions.map((r, i) => (
+              <li key={i}>
+                <button type="button" onMouseDown={() => pickName(r)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted">
+                  <span className="truncate">{r.name}</span>
+                  {r.cnpj && <span className="shrink-0 font-mono text-xs text-muted-foreground">{r.cnpj}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Movement detail drawer ───────────────────────────────────────────────────
 
 interface DrawerForm {
@@ -63,6 +163,7 @@ function MovementDrawer({
 }) {
   const patchMovement = usePatchMovement();
   const deleteMovement = useDeleteMovement();
+  const recipients = useRecipients();
 
   const initForm: DrawerForm = {
     description: movement?.description ?? "",
@@ -267,18 +368,13 @@ function MovementDrawer({
           <section>
             <h3 className="mb-3 text-sm font-semibold text-primary">Destinatário / Originador</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs text-muted-foreground">CNPJ / CPF</label>
-                <input value={form.cnpj} onChange={(e) => setStr("cnpj", e.target.value)} maxLength={18}
-                  placeholder="00.000.000/0000-00"
-                  className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground">Nome / Razão social</label>
-                <input value={form.recipient_name} onChange={(e) => setStr("recipient_name", e.target.value)} maxLength={200}
-                  placeholder={originLabel(movement.description)}
-                  className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
-              </div>
+              <RecipientFields
+                name={form.recipient_name}
+                cnpj={form.cnpj}
+                onName={(v) => setStr("recipient_name", v)}
+                onCnpj={(v) => setStr("cnpj", v)}
+                recipients={recipients}
+              />
             </div>
           </section>
 
@@ -431,6 +527,7 @@ function NewMovementDialog({
   onClose: () => void;
 }) {
   const createMovement = useCreateMovement();
+  const recipients = useRecipients();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     development_id: projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
@@ -562,17 +659,13 @@ function NewMovementDialog({
             <input type="date" value={form.date_competencia} onChange={(e) => set("date_competencia", e.target.value)}
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
           </div>
-          <div>
-            <label className="block text-sm font-medium">CNPJ / CPF</label>
-            <input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} maxLength={18}
-              placeholder="00.000.000/0000-00"
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Nome / Razão social</label>
-            <input value={form.recipient_name} onChange={(e) => set("recipient_name", e.target.value)} maxLength={200}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
+          <RecipientFields
+            name={form.recipient_name}
+            cnpj={form.cnpj}
+            onName={(v) => set("recipient_name", v)}
+            onCnpj={(v) => set("cnpj", v)}
+            recipients={recipients}
+          />
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="border px-5 py-2.5 text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
@@ -591,7 +684,7 @@ function NewMovementDialog({
 type Scope = "all" | "operational" | "empreendimentos";
 
 function ScopeFilters({
-  scope, onScope, projectId, onProject, category, onCategory, categories, projects, onNew,
+  scope, onScope, projectId, onProject, category, onCategory, categories, projects, onNew, search, onSearch,
 }: {
   scope: Scope; onScope: (v: Scope) => void;
   projectId: string; onProject: (v: string) => void;
@@ -599,6 +692,8 @@ function ScopeFilters({
   categories: string[];
   projects: { id: string; name: string }[];
   onNew: () => void;
+  search: string;
+  onSearch: (v: string) => void;
 }) {
   const SCOPES: { key: Scope; label: string }[] = [
     { key: "all", label: "Todos" },
@@ -618,6 +713,15 @@ function ScopeFilters({
               {label}
             </button>
           ))}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Buscar lançamento..."
+            className="border bg-background pl-8 pr-3 py-1.5 text-sm w-44 sm:w-56"
+          />
         </div>
         <button onClick={onNew} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
           <Plus className="size-4" /> Novo lançamento
@@ -653,6 +757,7 @@ function useMovementFilter(movements: ReturnType<typeof useAdmin>["data"]["movem
   const [scope, setScope] = useState<Scope>("all");
   const [projectId, setProjectId] = useState("all");
   const [category, setCategory] = useState("all");
+  const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => movements.filter((m) => {
     if (scope === "operational" && !m.isOperational) return false;
@@ -661,10 +766,11 @@ function useMovementFilter(movements: ReturnType<typeof useAdmin>["data"]["movem
       if (projectId !== "all" && m.projectId !== projectId) return false;
     }
     if (category !== "all" && m.category !== category) return false;
+    if (search.trim() && !m.description.toLowerCase().includes(search.toLowerCase().trim()) && !(m.recipientName ?? "").toLowerCase().includes(search.toLowerCase().trim())) return false;
     return true;
-  }), [movements, scope, projectId, category]);
+  }), [movements, scope, projectId, category, search]);
 
-  return { scope, setScope, projectId, setProjectId, category, setCategory, filtered };
+  return { scope, setScope, projectId, setProjectId, category, setCategory, search, setSearch, filtered };
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
@@ -672,7 +778,7 @@ function useMovementFilter(movements: ReturnType<typeof useAdmin>["data"]["movem
 function CaixaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: string) => void }) {
   const { data } = useAdmin();
   const allCategories = useMemo(() => Array.from(new Set(data.movements.map((m) => m.category))).sort(), [data.movements]);
-  const { scope, setScope, projectId, setProjectId, category, setCategory, filtered } = useMovementFilter(data.movements);
+  const { scope, setScope, projectId, setProjectId, category, setCategory, search, setSearch, filtered } = useMovementFilter(data.movements);
   const movements = useMemo(() => filtered.filter((m) => m.status === "Realizado")
     .sort((a, b) => b.date.localeCompare(a.date)), [filtered]);
 
@@ -683,6 +789,7 @@ function CaixaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: strin
         projectId={projectId} onProject={setProjectId}
         category={category} onCategory={setCategory}
         categories={allCategories} projects={data.projects} onNew={onNew}
+        search={search} onSearch={setSearch}
       />
       <div className="space-y-2">
         {movements.map((m) => {
@@ -699,7 +806,7 @@ function CaixaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: strin
 function CompetenciaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id: string) => void }) {
   const { data } = useAdmin();
   const allCategories = useMemo(() => Array.from(new Set(data.movements.map((m) => m.category))).sort(), [data.movements]);
-  const { scope, setScope, projectId, setProjectId, category, setCategory, filtered } = useMovementFilter(data.movements);
+  const { scope, setScope, projectId, setProjectId, category, setCategory, search, setSearch, filtered } = useMovementFilter(data.movements);
   const movements = useMemo(() => filtered.sort((a, b) => {
     const da = a.dateCompetencia ?? a.date;
     const db = b.dateCompetencia ?? b.date;
@@ -713,6 +820,7 @@ function CompetenciaTab({ onNew, onSelect }: { onNew: () => void; onSelect: (id:
         projectId={projectId} onProject={setProjectId}
         category={category} onCategory={setCategory}
         categories={allCategories} projects={data.projects} onNew={onNew}
+        search={search} onSearch={setSearch}
       />
       <div className="space-y-2">
         {movements.map((m) => {

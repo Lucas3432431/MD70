@@ -7,6 +7,7 @@ import { summarize } from "@/lib/data/portal";
 import { brl, monthLabel, pct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MonthPoint } from "@/lib/data/portal";
+import { usePatrimonioTicker } from "@/lib/hooks/usePatrimonioTicker";
 
 export const Route = createFileRoute("/_authenticated/portal/")({
   head: () => ({ meta: [
@@ -14,6 +15,17 @@ export const Route = createFileRoute("/_authenticated/portal/")({
     { property: "og:title", content: "Visão geral — Portal MD70" }, { property: "og:description", content: "Resumo privado dos seus investimentos." },
   ] }), component: Dashboard,
 });
+
+function PatrimonioCard({ value, invested }: { value: number; invested: number }) {
+  const display = usePatrimonioTicker(value, { animate: true, animDurationMs: 1200 });
+  return (
+    <div className="bg-primary p-7 text-primary-foreground md:col-span-2">
+      <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio atualizado</p>
+      <p className="num mt-4 font-display text-5xl md:text-6xl tabular-nums">{brl(display)}</p>
+      <p className="mt-4 text-sm opacity-70">Total investido: {brl(invested)}</p>
+    </div>
+  );
+}
 
 function Dashboard() {
   const { data, isPending } = usePortalData();
@@ -52,11 +64,7 @@ function Dashboard() {
 
       {/* KPI grid */}
       <section className="grid gap-px bg-border border md:grid-cols-4">
-        <div className="bg-primary p-7 text-primary-foreground md:col-span-2">
-          <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio atualizado</p>
-          <p className="num mt-4 font-display text-5xl md:text-6xl">{brl(summary.value)}</p>
-          <p className="mt-4 text-sm opacity-70">Total investido: {brl(summary.invested)}</p>
-        </div>
+        <PatrimonioCard value={summary.value} invested={summary.invested} />
 
         {/* Rentabilidade — CDI multiple */}
         <div className="bg-card p-7">

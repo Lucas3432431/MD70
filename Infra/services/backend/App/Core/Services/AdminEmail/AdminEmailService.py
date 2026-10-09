@@ -5,8 +5,8 @@ AdminEmailService - Envio de e-mails transacionais e alertas críticos via Resen
 import httpx
 from typing import List, Dict, Any
 
-from App.Core.Logs import error, info
-from App.Core.Settings.Settings import ADMIN_EMAIL, RESEND_API_KEY
+from App.Core.Logs import error, info, debug
+from App.Core.Settings.Settings import ADMIN_EMAIL, RESEND_API_KEY, ENVIRONMENT
 from App.Core.Services.TelegramAlert import telegram_alert_service
 
 _RESEND_URL = "https://api.resend.com/emails"
@@ -23,6 +23,9 @@ class AdminEmailService:
         from_email: str = NOREPLY_FROM,
         attachments: List[Dict[str, Any]] | None = None,
     ) -> bool:
+        if ENVIRONMENT != "production":
+            debug(f"[Resend] Ignorando e-mail em ambiente {ENVIRONMENT}: {subject}")
+            return True
         if not RESEND_API_KEY:
             error("[Resend] RESEND_API_KEY não configurada")
             return False

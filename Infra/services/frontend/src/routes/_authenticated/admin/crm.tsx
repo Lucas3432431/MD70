@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, X, ChevronDown } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, Search } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchLead, useCreateLead, useDeleteLead } from "@/lib/hooks/useAdminData";
@@ -305,7 +305,13 @@ function CRM() {
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [openStages, setOpenStages] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const selectedLead = selected ? data.leads.find((l) => l.id === selected) ?? null : null;
+
+  const visibleLeads = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return q ? data.leads.filter(l => l.name.toLowerCase().includes(q) || (l.email ?? "").toLowerCase().includes(q) || (l.phone ?? "").toLowerCase().includes(q)) : data.leads;
+  }, [data.leads, search]);
 
   const investedByName = useMemo(() => {
     const map = new Map<string, number>();
@@ -349,7 +355,16 @@ function CRM() {
     <>
       <AdminHeading title="CRM">Leads e investidores por empreendimento e estágio do funil.</AdminHeading>
 
-      <div className="mb-5 flex justify-end">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar lead..."
+            className="border bg-background pl-8 pr-3 py-2 text-sm w-44 sm:w-56"
+          />
+        </div>
         <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
           <Plus className="size-4" /> Novo lead
         </button>
@@ -358,7 +373,7 @@ function CRM() {
       {/* Mobile: collapsible stacked cards */}
       <div className="sm:hidden space-y-1">
         {STAGES.map((stage) => {
-          const cards = data.leads.filter((l) => l.status === stage);
+          const cards = visibleLeads.filter((l) => l.status === stage);
           const isActive = stage === "Investidor ativo";
           const isOpen = openStages.has(stage);
           return (
@@ -388,7 +403,7 @@ function CRM() {
       <div className="hidden sm:block overflow-x-auto pb-4">
         <div className="flex gap-3" style={{ minWidth: `${STAGES.length * 216}px` }}>
           {STAGES.map((stage) => {
-            const cards = data.leads.filter((l) => l.status === stage);
+            const cards = visibleLeads.filter((l) => l.status === stage);
             const isActive = stage === "Investidor ativo";
             return (
               <div key={stage} className="flex w-52 shrink-0 flex-col">
@@ -406,7 +421,9 @@ function CRM() {
         </div>
       </div>
 
-      <p className="mt-5 text-xs text-muted-foreground">{data.leads.length} lead{data.leads.length !== 1 ? "s" : ""} no total.</p>
+      <p className="mt-5 text-xs text-muted-foreground">
+        {search.trim() ? `${visibleLeads.length} de ${data.leads.length}` : data.leads.length} lead{data.leads.length !== 1 ? "s" : ""} no total.
+      </p>
 
       <LeadDrawer
         key={selected ?? "none"}

@@ -121,6 +121,7 @@ services:
     cap_drop:
       - ALL
     volumes:
+      - ./backend/App:/app/App:ro
       - ./backend/Data:/app/Data:rw
       - ./backend/Media:/app/Media:rw
       - ./secrets/app.secrets:/run/secrets/app.env:ro
@@ -180,6 +181,8 @@ services:
     cap_drop:
       - ALL
     volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/app.config.ts:/app/app.config.ts:ro
       - ./secrets/app.secrets:/run/secrets/app.env:ro
     tmpfs:
       - /app/node_modules/.vite-temp:mode=1777,size=64M

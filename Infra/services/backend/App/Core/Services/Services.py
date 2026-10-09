@@ -53,6 +53,7 @@ _CSRF_EXEMPT_PREFIXES = [
     "/api/validate-postal-code",  # CEP — endpoint público chamado do cardápio
     "/api/validate-email",       # Validação de e-mail — endpoint público, sem sessão
     "/api/validate-cellphone",   # Validação de telefone — endpoint público, sem sessão
+    "/api/public/",              # Endpoints públicos sem autenticação
 ]
 
 
@@ -120,7 +121,7 @@ from .Skills.SkillsRoutes import skills_router
 from .Notes.NotesRoutes import notes_router
 from .Google.GoogleActionsRoutes import google_actions_router
 from .Admin.AdminRoutes import admin_router
-from .MD70.AdminRoutes import router as md70_admin_router
+from .MD70.AdminRoutes import router as md70_admin_router, public_router as md70_public_router
 from .MD70.PortalRoutes import router as md70_portal_router
 
 try:
@@ -407,6 +408,19 @@ def _resolve_auth_token(token: str):
         from App.Features.Auth import get_auth_service
 
         payload = get_auth_service().verify_token(token, check_db=True)
+
+        # Anon admin bypass — mapeia para admin real no DB
+        if not payload:
+            anon = get_auth_service().verify_token(token, check_db=False)
+            if anon and anon.get("user_id") == "anon-admin-md70":
+                from App.Core.Crunch.TablesSQL.DBManager import DatabaseManager
+                admin = DatabaseManager.fetch_one(
+                    "SELECT user_id, client_id FROM users WHERE role = :role LIMIT 1",
+                    {"role": "admin"},
+                )
+                if admin:
+                    payload = {"user_id": admin.get("user_id"), "client_id": admin.get("client_id")}
+
         if payload:
             # Cache até a expiração real do token (max 30 min), com 30s de margem
             import time as _time
@@ -539,6 +553,7 @@ app.include_router(google_actions_router)
 app.include_router(admin_router)
 app.include_router(md70_admin_router)
 app.include_router(md70_portal_router)
+app.include_router(md70_public_router)
 if dev_router:
     app.include_router(dev_router)
 if proxy_router:

@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  FileText,
   FolderOpen,
   Loader2,
   Mic,
@@ -35,6 +36,12 @@ interface Message {
 
 const WAVEFORM_BARS = 24;
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getCsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
   return match?.[1] ? decodeURIComponent(match[1]) : "";
@@ -58,11 +65,15 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachmentId, setAttachmentId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [waveformBars, setWaveformBars] = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadFileRef = useRef<((file: File) => void) | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,6 +108,70 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       audioCtxRef.current?.close();
+    };
+  }, []);
+
+  // ── Eager file upload ───────────────────────────────────────────────────
+  const uploadFile = useCallback(async (file: File) => {
+    setSelectedFile(file);
+    setAttachmentId(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload/", {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRF-Token": getCsrfToken() },
+        body: fd,
+      });
+      if (!res.ok) throw new Error(`upload ${res.status}`);
+      const data = await res.json();
+      setAttachmentId(data.attachment_id as string);
+    } catch (err) {
+      toast.error("Erro ao fazer upload do arquivo.");
+      setSelectedFile(null);
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+  uploadFileRef.current = uploadFile;
+
+  // ── Full-screen drag & drop ─────────────────────────────────────────────
+  useEffect(() => {
+    const ACCEPTED = ["application/pdf", "image/jpeg", "image/png"];
+    let counter = 0;
+
+    const onDragEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) { counter++; setIsDragging(true); }
+    };
+    const onDragLeave = () => {
+      counter--; if (counter <= 0) { counter = 0; setIsDragging(false); }
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      counter = 0; setIsDragging(false); e.preventDefault();
+      const file = e.dataTransfer?.files[0];
+      if (!file) return;
+      if (ACCEPTED.includes(file.type) || file.type.startsWith("audio/")) {
+        uploadFileRef.current?.(file);
+      } else {
+        toast.error("Tipo não suportado. Use PDF, JPG, PNG ou áudio.");
+      }
+    };
+
+    document.addEventListener("dragenter", onDragEnter);
+    document.addEventListener("dragleave", onDragLeave);
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragenter", onDragEnter);
+      document.removeEventListener("dragleave", onDragLeave);
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("drop", onDrop);
     };
   }, []);
 
@@ -155,7 +230,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
         try {
           const data = JSON.parse(event.data as string);
           if (data.type === "job_status") {
-            if (data.status === "completed" || data.status === "failed") {
+            if (data.status === "completed" || data.status === "failed" || data.status === "error") {
               if (wsFallbackRef.current) clearTimeout(wsFallbackRef.current);
               ws.close();
               if (data.status === "completed") await fetchAndAppendAssistantMessage(id);
@@ -181,9 +256,13 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
       if (pending) return;
 
       const userMessage = text.trim();
-      setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+      const fileToUpload = selectedFile;
+      const eagerAttachmentId = attachmentId;
+
+      setMessages((prev) => [...prev, { role: "user", content: userMessage || `📎 ${fileToUpload?.name}` }]);
       setInput("");
       setSelectedFile(null);
+      setAttachmentId(null);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       setPending(true);
 
@@ -200,24 +279,26 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
             method: "POST",
             credentials: "include",
             headers: jsonHeaders(),
-            body: JSON.stringify({ chat_name: userMessage.slice(0, 50) || "Admin", model: "gpt-4o-mini" }),
+            body: JSON.stringify({ chat_name: userMessage.slice(0, 50) || fileToUpload?.name || "Admin", model: "gpt-4o-mini" }),
           });
           if (!res.ok) throw new Error(`new-chat ${res.status}`);
           const data = await res.json();
           activeChatId = data.chat_id as string;
           setChatId(activeChatId);
-          // Mark as loaded BEFORE navigate so the URL-change useEffect skips the re-fetch
           loadedChatRef.current = activeChatId;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           navigate({ search: ((prev: Record<string, unknown>) => { const { panel: _, ...rest } = prev; return { ...rest, chat: activeChatId! }; }) as any, replace: false });
         }
 
-        // Send the actual message (new or existing chat)
+        // Send message (attachment already uploaded eagerly)
+        const msgBody: Record<string, unknown> = { message: userMessage || `📎 ${fileToUpload?.name ?? "arquivo"}`, model: "gpt-4o-mini" };
+        if (eagerAttachmentId) msgBody["attachment"] = { attachment_type: "file", attachment_id: eagerAttachmentId };
+
         const msgRes = await fetch(`/api/chat/${activeChatId}/message`, {
           method: "POST",
           credentials: "include",
           headers: jsonHeaders(),
-          body: JSON.stringify({ message: userMessage, model: "gpt-4o-mini" }),
+          body: JSON.stringify(msgBody),
         });
         if (!msgRes.ok) throw new Error(`send ${msgRes.status}`);
 
@@ -228,7 +309,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
         console.error(err);
       }
     },
-    [chatId, chatStarted, navigate, pending, selectedFile, openWebSocket],
+    [chatId, chatStarted, navigate, pending, selectedFile, attachmentId, openWebSocket],
   );
 
   const closeChat = useCallback(() => {
@@ -322,7 +403,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
     setIsRecording(false); setRecordingTime(0);
   }, [stopWaveformAnimation]);
 
-  const canSend = (input.trim().length > 0 || selectedFile !== null) && !pending;
+  const canSend = (input.trim().length > 0 || selectedFile !== null) && !pending && !uploading;
 
   const panelOpen = chatStarted && sideExpanded;
   const panelState = !chatStarted ? "closed" : sideExpanded ? "open" : "collapsed";
@@ -332,14 +413,59 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
   const InputRow = (
     <>
       {selectedFile && !isRecording && (
-        <div className="mb-1.5 px-1 flex items-center gap-1">
-          <div className="flex items-center gap-1.5 rounded-xl bg-muted px-2 py-1 text-xs text-foreground max-w-[200px]">
-            <Paperclip className="size-3 shrink-0" />
-            <span className="truncate">{selectedFile.name}</span>
-            <button type="button" aria-label="Remover arquivo" className="ml-0.5 text-muted-foreground hover:text-foreground" onClick={() => setSelectedFile(null)}>
-              <X className="size-3" />
-            </button>
-          </div>
+        <div className="mb-1.5 px-1 flex items-center gap-2">
+          {selectedFile.type.startsWith("image/") ? (
+            <div className="group relative w-16 h-16 rounded-lg overflow-hidden shrink-0">
+              <img
+                src={URL.createObjectURL(selectedFile)}
+                alt={selectedFile.name}
+                className="w-full h-full object-cover rounded-lg"
+              />
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-primary/20 rounded-lg">
+                  <Loader2 className="size-4 text-primary animate-spin" />
+                </div>
+              )}
+              {!uploading && (
+                <button
+                  type="button"
+                  aria-label="Remover arquivo"
+                  className="absolute -top-1.5 -right-1.5 z-20 flex size-5 items-center justify-center rounded-full bg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted-foreground/30"
+                  onClick={() => { setSelectedFile(null); setAttachmentId(null); }}
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="group relative h-16 w-52 shrink-0 rounded-lg border border-border bg-muted p-1">
+              {uploading && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center gap-1.5 rounded-lg bg-primary/10">
+                  <Loader2 className="size-4 text-primary animate-spin" />
+                  <span className="text-xs font-medium text-primary">Enviando…</span>
+                </div>
+              )}
+              <div className={cn("flex h-full w-full flex-col items-start justify-center px-2 py-1", uploading && "opacity-40")}>
+                <span className="w-full truncate text-sm font-bold leading-tight">{selectedFile.name}</span>
+                <div className="mt-1 flex items-center gap-1">
+                  <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground">.{selectedFile.name.split(".").pop()}</span>
+                  <span className="text-xs text-muted-foreground">·</span>
+                  <span className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</span>
+                </div>
+              </div>
+              {!uploading && (
+                <button
+                  type="button"
+                  aria-label="Remover arquivo"
+                  className="absolute -top-2.5 -right-2.5 z-20 flex size-6 items-center justify-center rounded-full bg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted-foreground/30"
+                  onClick={() => { setSelectedFile(null); setAttachmentId(null); }}
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
       {isRecording ? (
@@ -375,7 +501,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <input ref={fileInputRef} type="file" className="sr-only" aria-hidden tabIndex={-1} onChange={(e) => { setSelectedFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,audio/*" className="sr-only" aria-hidden tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
           <Textarea
             ref={textareaRef}
             value={input}
@@ -407,7 +533,7 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
     let grp: Message[] | null = null;
     let grpStart = 0;
     for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
+      const m = messages[i]!;
       if (m.role === "tool") {
         if (!grp) { grp = []; grpStart = i; }
         grp.push(m);
@@ -523,9 +649,10 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
             {/* Input inside panel */}
             <div className="flex-shrink-0 border-t p-2">
               <div
-                className="rounded-xl bg-muted/20 p-1"
+                className="relative overflow-hidden rounded-xl bg-muted/20 p-1"
                 style={{ boxShadow: "0 0 20px oklch(0.29 0.045 195 / 0.2), 0 2px 4px -1px rgba(0,0,0,0.06)" }}
               >
+                {isDragging && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/80"><Paperclip className="size-4 text-primary" /><span className="ml-2 text-sm font-medium text-primary">Soltar arquivo</span></div>}
                 {InputRow}
               </div>
             </div>
@@ -556,9 +683,10 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
         <div className="hidden lg:block fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 pointer-events-none">
           <div className="mx-auto w-full max-w-3xl px-4 lg:max-w-[46rem] pointer-events-auto">
             <div
-              className="rounded-xl border-transparent bg-background p-2"
+              className="relative overflow-hidden rounded-xl border-transparent bg-background p-2"
               style={{ boxShadow: "0 0 30px oklch(0.29 0.045 195 / 0.35), 0 0 60px oklch(0.29 0.045 195 / 0.12), 0 4px 6px -1px rgba(0,0,0,0.08)" }}
             >
+              {isDragging && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/80"><Paperclip className="size-4 text-primary" /><span className="ml-2 text-sm font-medium text-primary">Soltar arquivo</span></div>}
               {InputRow}
             </div>
           </div>
@@ -621,9 +749,10 @@ export const AdminFloatingChat: FC<{ onPanelChange?: (state: "closed" | "collaps
       >
         <div className="mx-auto w-full max-w-3xl px-4">
           <div
-            className="rounded-xl border-transparent bg-background p-2"
+            className="relative overflow-hidden rounded-xl border-transparent bg-background p-2"
             style={{ boxShadow: "0 0 30px oklch(0.29 0.045 195 / 0.35), 0 0 60px oklch(0.29 0.045 195 / 0.12), 0 4px 6px -1px rgba(0,0,0,0.08)" }}
           >
+            {isDragging && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/80"><Paperclip className="size-4 text-primary" /><span className="ml-2 text-sm font-medium text-primary">Soltar arquivo</span></div>}
             {InputRow}
           </div>
         </div>

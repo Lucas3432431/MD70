@@ -3,9 +3,10 @@ import { useState } from "react";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { PrevistVsRealizadoChart } from "@/components/admin/PrevistVsRealizadoChart";
 import { sum } from "@/lib/data/admin-calculations";
-import { brlShort } from "@/lib/format";
+import { brl, brlShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList } from "recharts";
+import { usePatrimonioTicker } from "@/lib/hooks/usePatrimonioTicker";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -19,14 +20,25 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminHome,
 });
 
+function AdminPatrimonioCard({ value, ratePerSecond }: { value: number; ratePerSecond?: number }) {
+  const display = usePatrimonioTicker(value, { animate: true, animDurationMs: 1000, ratePerSecond });
+  return (
+    <div className="bg-primary p-7 text-primary-foreground">
+      <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio sob gestão</p>
+      <p className="num mt-4 font-display text-4xl md:text-5xl tabular-nums">{brl(display)}</p>
+    </div>
+  );
+}
+
 function AdminHome() {
   const { data } = useAdmin();
 
-  const patrimonioSobGestao = sum(
+  const patrimonioSobGestao = data.aumCurrent ?? sum(
     data.movements
       .filter((m) => m.status === "Realizado" && m.category === "Capital")
       .map((m) => m.direction === "Entrada" ? m.value : -m.value),
   );
+  const patrimonioRatePerSecond = data.aumRatePerSecond;
 
   const currentYear = new Date().getFullYear().toString();
   const OPERATIONAL_CATEGORIES = ["Comissão", "Receita", "Operação", "Serviços"];
@@ -42,10 +54,7 @@ function AdminHome() {
 
       {/* Hero KPI cards */}
       <div className="grid gap-px border bg-border md:grid-cols-2">
-        <div className="bg-primary p-7 text-primary-foreground">
-          <p className="text-xs uppercase tracking-[0.14em] opacity-60">Patrimônio sob gestão</p>
-          <p className="num mt-4 font-display text-4xl md:text-5xl">{brlShort(patrimonioSobGestao)}</p>
-        </div>
+        <AdminPatrimonioCard value={patrimonioSobGestao} ratePerSecond={patrimonioRatePerSecond} />
         <div className="bg-card p-7">
           <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Faturamento {currentYear}</p>
           <p className="num mt-4 font-display text-4xl text-primary md:text-5xl">{brlShort(faturamentoAno)}</p>

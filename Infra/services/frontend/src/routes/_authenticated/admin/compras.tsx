@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, Trash2, X, ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Trash2, X, ChevronDown, Search } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchPurchase, useCreatePurchase, useDeletePurchase, useCreateQuote, usePatchQuote, useDeleteQuote } from "@/lib/hooks/useAdminData";
@@ -721,11 +721,19 @@ function NewPurchaseDialog({ projects, onClose }: { projects: { id: string; name
 function Compras() {
   const { data } = useAdmin();
   const [filterProject, setFilterProject] = useState("all");
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [openStages, setOpenStages] = useState<Set<string>>(new Set());
 
-  const filtered = data.purchases.filter((p) => filterProject === "all" || p.projectId === filterProject);
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return data.purchases.filter((p) => {
+      if (filterProject !== "all" && p.projectId !== filterProject) return false;
+      if (q && !p.description.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [data.purchases, filterProject, search]);
   const selectedPurchase = selected ? data.purchases.find((p) => p.id === selected) ?? null : null;
 
   function toggleStage(stage: string) {
@@ -763,6 +771,15 @@ function Compras() {
             {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </label>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar compra..."
+            className="border bg-background pl-8 pr-3 py-2 text-sm w-40 sm:w-52"
+          />
+        </div>
         <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
           <Plus className="size-4" /> Nova solicitação
         </button>
