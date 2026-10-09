@@ -1,77 +1,41 @@
 #!/bin/bash
-# Auto-update script — pulls latest code from origin/main and rebuilds if needed.
-# Safe to run unattended as a cron job; exits 0 with no side-effects when already up-to-date.
+# Atualiza o código (git pull) e faz o rebuild do stack de produção só se o
+# código em Infra/services mudou desde o último deploy bem-sucedido.
+# Chamado pelo boot_windows.ps1 (tarefa agendada "MD70 Boot": no logon e diário).
 #
-# CRON SETUP (add to crontab — or run with --setup-cron to do it automatically):
-#   0 3 * * * /home/lucascamargo/Lucas/Apps/MD70/Infra/services/scripts/update_prod.sh >> /var/log/md70_update.log 2>&1
+# O último commit deployado fica em ~/.md70_deployed_commit. Comparar com ele
+# (e não só com o HEAD de antes do pull) faz um build que falhou ser tentado de
+# novo na próxima execução. Sem esse arquivo, faz o rebuild.
 #
-# Usage:
-#   ./update_prod.sh               — normal update check
-#   ./update_prod.sh --setup-cron  — install the cron entry automatically
-set -euo pipefail
+# Saída: 0 = atualizado ou nada a fazer; != 0 = build falhou (containers antigos ficam).
+#
+# Usage: ./update_prod.sh
+set -uo pipefail
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-# scripts → services → Infra → MD70 (repo root)
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"   # scripts → services → Infra → MD70
+MARKER="$HOME/.md70_deployed_commit"
 
-# ── Helper ────────────────────────────────────────────────────────────────────
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# ── --setup-cron mode ─────────────────────────────────────────────────────────
-if [[ "${1:-}" == "--setup-cron" ]]; then
-    CRON_LINE="0 3 * * * $SCRIPT_PATH >> /var/log/md70_update.log 2>&1"
+cd "$REPO_ROOT" || exit 1
 
-    # Check if already present to avoid duplicates
-    if crontab -l 2>/dev/null | grep -qF "$SCRIPT_PATH"; then
-        echo "Cron entry already exists — nothing changed."
-        crontab -l 2>/dev/null | grep "$SCRIPT_PATH"
-    else
-        (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
-        echo "Cron entry added:"
-        echo "  $CRON_LINE"
-        echo ""
-        echo "Current crontab:"
-        crontab -l
-    fi
+git pull --ff-only || log "AVISO: git pull falhou na máquina; verificando o commit atual."
+
+HEAD_HASH="$(git rev-parse HEAD)"
+DEPLOYED="$(cat "$MARKER" 2>/dev/null || true)"
+
+if [ -n "$DEPLOYED" ] && git cat-file -e "$DEPLOYED^{commit}" 2>/dev/null \
+    && git diff --quiet "$DEPLOYED" HEAD -- Infra/services; then
+    log "Sem mudanças em Infra/services desde ${DEPLOYED:0:7} (HEAD ${HEAD_HASH:0:7}) — sem rebuild."
     exit 0
 fi
 
-# ── Main update logic ─────────────────────────────────────────────────────────
-log "=== MD70 update check started ==="
-log "Repo root : $REPO_ROOT"
-
-cd "$REPO_ROOT"
-
-# Fetch remote refs — read-only, no local changes
-log "Fetching origin/main..."
-git fetch origin main
-
-LOCAL_HASH="$(git rev-parse HEAD)"
-REMOTE_HASH="$(git rev-parse origin/main)"
-LOCAL_SHORT="${LOCAL_HASH:0:7}"
-REMOTE_SHORT="${REMOTE_HASH:0:7}"
-
-log "Local  : $LOCAL_SHORT"
-log "Remote : $REMOTE_SHORT"
-
-if [[ "$LOCAL_HASH" == "$REMOTE_HASH" ]]; then
-    log "Already up to date — skipping rebuild."
-    log "=== Done ==="
-    exit 0
+log "Mudanças desde ${DEPLOYED:0:7} — rebuild em $(git log -1 --format='%h %s')"
+if (cd Infra/services && ./scripts/start_prod.sh); then
+    echo "$HEAD_HASH" > "$MARKER"
+    log "Deploy de ${HEAD_HASH:0:7} concluído."
+else
+    log "AVISO: build falhou; os containers existentes serão religados."
+    exit 1
 fi
-
-log "Changes detected ($LOCAL_SHORT -> $REMOTE_SHORT) — pulling and rebuilding..."
-
-git pull --rebase origin main
-
-NEW_HASH="$(git rev-parse HEAD)"
-log "Pulled to $(git log -1 --format='%h %s' "$NEW_HASH")"
-
-log "Starting full build + deploy via start_prod.sh..."
-bash "$SCRIPT_DIR/start_prod.sh"
-
-log "=== Update complete ($(date '+%Y-%m-%d %H:%M:%S')) ==="

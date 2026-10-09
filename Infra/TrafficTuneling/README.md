@@ -112,16 +112,17 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
 
 - **Sem limites de CPU e memória.** Na máquina do Podman sobre WSL, os controladores de cgroup não são delegados ao usuário rootless (o processo fica em `/non-systemd/...`), e qualquer `deploy.resources.limits` falha com `crun: open memory.max`. Por isso `~/.config/containers/containers.conf` tem `cgroups = "disabled"`: os containers sobem, mas **os limites do compose são ignorados**. Rodar com root (`sudo podman`) aplicaria os limites, mas o `start_prod.sh` usa `podman unshare`, que exige rootless.
 - **Por que não o serviço do Windows?** O `cloudflared service install` no Windows foi testado e descartado. Com `--config` no `ImagePath`, o serviço encerra com `flag provided but not defined: -config`. Sem argumentos, lendo `systemprofile\.cloudflared\config.yml`, cai em loop sem logar o motivo. Rodar o conector como container junto do MD70 evita isso e não exige administrador.
-- **Reboot do Windows.** A tarefa agendada **"MD70 Boot"** (no logon do usuário, com 30s de atraso) roda [`boot_windows.ps1`](boot_windows.ps1), que **atualiza e faz o deploy a cada boot**:
+- **Reboot do Windows e atualização diária.** A tarefa agendada **"MD70 Boot"** roda [`boot_windows.ps1`](boot_windows.ps1) em dois gatilhos: no logon do usuário (com 30s de atraso) e **todo dia às 03:00**. A cada execução ela:
   1. liga a máquina do Podman, se precisar;
   2. `git pull --ff-only` no clone do Windows (GitHub → Windows), com até 5 tentativas, porque a rede pode demorar a subir depois do logon;
-  3. na máquina: `git pull --ff-only` em `~/MD70` (Windows → máquina) e `start_prod.sh` (build das imagens + `up`);
-  4. `boot_prod.sh`: liga o túnel e espera cada container ficar healthy, na ordem dos `depends_on`.
+  3. na máquina, [`update_prod.sh`](../services/scripts/update_prod.sh): `git pull --ff-only` em `~/MD70` (Windows → máquina) e `start_prod.sh` (build das imagens + `up`) **só se `Infra/services` mudou desde o último deploy**. O último commit deployado fica em `~/.md70_deployed_commit`; um build que falhou é tentado de novo na próxima execução;
+  4. `boot_prod.sh`: liga o túnel e espera cada container ficar healthy, na ordem dos `depends_on` (containers que já estão rodando não são reiniciados).
 
   Se o pull ou o build falharem, o passo 4 religa os containers que já existiam, e o site volta **na versão anterior** em vez de ficar fora do ar. Procure `AVISO:` no log para saber se isso aconteceu. O log fica em `%LOCALAPPDATA%\md70-boot.log`.
 
   Cuidados:
-  - Como o build roda a cada boot, o site demora mais para voltar (vários minutos; o frontend sozinho pode levar até 10).
+  - Quando há rebuild, o site fica fora por vários minutos (o frontend sozinho pode levar até 10). Sem mudança no código, nada é reiniciado.
+  - Para forçar um rebuild sem mudança no código: `podman machine ssh 'rm ~/.md70_deployed_commit'` e rodar o `boot_windows.ps1`.
   - O pull é `--ff-only`. Se o clone do Windows tiver commits locais não enviados ao GitHub, ou alterações não commitadas nos arquivos que o pull traz, o pull falha e o boot sobe a versão que já estava na máquina. Mantenha o clone do Windows limpo e sincronizado com o `origin`.
   - O pull do Windows usa SSH (`git@github.com`) em `BatchMode`, sem prompt. A chave SSH precisa funcionar sem senha interativa (sem passphrase, ou carregada no `ssh-agent` do Windows).
   - A máquina só pega o que estiver **commitado** no clone do Windows (o `origin` dela é esse clone).
@@ -131,7 +132,9 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
   $s = "$env:USERPROFILE\Trabalho\MD70\Infra\TrafficTuneling\boot_windows.ps1"
   $a = New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$s`""
   $t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"; $t.Delay = 'PT30S'
-  Register-ScheduledTask -TaskName 'MD70 Boot' -Action $a -Trigger $t -Force
+  $d = New-ScheduledTaskTrigger -Daily -At 03:00
+  $o = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
+  Register-ScheduledTask -TaskName 'MD70 Boot' -Action $a -Trigger $t,$d -Settings $o -Force
   ```
 
 - **Frontend self-hosted.** O `@lovable.dev/vite-tanstack-config` faz o build com o nitro no preset `cloudflare-module` (bundle de Worker), que não roda aqui. O `frontend/entrypoint.sh` de produção exporta `NITRO_PRESET=bun` e serve `.output/server/index.mjs`. Como o build roda no start do container, o frontend de prod não usa `read_only`.
@@ -154,7 +157,7 @@ Outros itens:
 
 | Item | Estado | Observação |
 |---|---|---|
-| Tarefa agendada "MD70 Boot" | Ativa | Ver [Reboot do Windows](#limitações-conhecidas) |
+| Tarefa agendada "MD70 Boot" | Ativa (logon + diária 03:00) | Ver [Reboot do Windows](#limitações-conhecidas). A diária só roda com o usuário logado |
 | Login automático (`AutoAdminLogon`) | **Desativado** | Sem ele, o MD70 só volta depois que alguém entra no Windows |
 | Horário ativo do Windows Update | 08h–17h | O Windows evita reiniciar nesse intervalo, mas pode reiniciar fora dele |
 | Inicialização Rápida (Fast Startup) | Ativada | Não atrapalha o boot do MD70; só afeta o desligamento completo |

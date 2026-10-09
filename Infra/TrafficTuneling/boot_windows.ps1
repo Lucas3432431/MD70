@@ -1,12 +1,14 @@
-# Liga a máquina do Podman, atualiza o código (git pull), faz o build e sobe o
-# stack de produção do MD70 (túnel incluso).
-# Registrado como tarefa agendada "MD70 Boot" no logon do usuário (ver README.md).
+# Liga a máquina do Podman, atualiza o código (git pull), faz o build se o código
+# mudou e sobe o stack de produção do MD70 (túnel incluso).
+# Registrado como tarefa agendada "MD70 Boot": no logon do usuário e diariamente
+# às 03:00 (ver README.md).
 # Log: %LOCALAPPDATA%\md70-boot.log
 #
 # Fluxo:
 #   1. podman machine start (se parada)
 #   2. git pull no clone do Windows  (GitHub → Windows)
-#   3. git pull no clone da máquina   (Windows → ~/MD70) + start_prod.sh (build + up)
+#   3. update_prod.sh na máquina: git pull (Windows → ~/MD70) e start_prod.sh
+#      (build + up) só se Infra/services mudou desde o último deploy
 #   4. boot_prod.sh: liga o túnel e espera cada container ficar healthy
 # Se o pull ou o build falharem, o passo 4 religa os containers que já existiam,
 # então o site volta na versão anterior em vez de ficar fora do ar.
@@ -37,11 +39,9 @@ if (-not $pulled) {
     Write-Output "AVISO: git pull no Windows falhou; a máquina vai usar o último commit local."
 }
 
-$remote = @(
-    'cd ~/MD70 && git pull --ff-only && (cd Infra/services && ./scripts/start_prod.sh)'
-    '|| echo AVISO: pull/build falhou na maquina, religando os containers existentes;'
-    'bash ~/MD70/Infra/services/scripts/boot_prod.sh'
-) -join ' '
+# update_prod.sh só faz rebuild se Infra/services mudou desde o último deploy.
+# boot_prod.sh não mexe em container que já está rodando.
+$remote = 'bash ~/MD70/Infra/services/scripts/update_prod.sh; bash ~/MD70/Infra/services/scripts/boot_prod.sh'
 & $podman machine ssh $remote
 
 Stop-Transcript | Out-Null
