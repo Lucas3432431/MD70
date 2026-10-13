@@ -36,6 +36,7 @@ OBRA_CATEGORIES: list[str] = [
     "Máquinas e equipamentos",
     "Projetos",
     "Segurança",
+    "Telhado",
     "Outros",
 ]
 

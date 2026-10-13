@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   FileText, Plus, Trash2, X, Search, Filter,
   Zap, Droplet, Hammer, Wrench, FileCheck, Home, TrendingUp,
-  RefreshCw, ShieldCheck, Package, Percent, Layers, Landmark,
+  RefreshCw, ShieldCheck, Package, Percent, Layers, Landmark, Triangle,
 } from "lucide-react";
 
 const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -20,6 +20,7 @@ const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>>
   "Máquinas e equipamentos": Wrench,
   "Projetos":                FileText,
   "Segurança":               ShieldCheck,
+  "Telhado":                 Triangle,
   "Outros":                  Package,
   "Comissão":                Percent,
 };
