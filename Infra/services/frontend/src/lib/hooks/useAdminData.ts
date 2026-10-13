@@ -145,3 +145,38 @@ export function usePatchBudgetLine() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
   });
 }
+
+export function useCreateSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post("/portal-admin/suppliers", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
+  });
+}
+
+export function usePatchSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Record<string, unknown>) =>
+      api.patch(`/portal-admin/suppliers/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
+  });
+}
+
+export function useDeleteSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/portal-admin/suppliers/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
+  });
+}
+
+export function usePatchCdiRate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ yearMonth, rate }: { yearMonth: string; rate: number }) =>
+      api.put(`/portal-admin/cdi/${yearMonth}`, { rate }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-data"] }),
+  });
+}

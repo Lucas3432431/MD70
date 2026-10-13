@@ -29,6 +29,7 @@ import { Route as AuthenticatedAdminComprasRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminCrmRouteImport } from './routes/_authenticated/admin/crm'
 import { Route as AuthenticatedAdminEmpreendimentosRouteImport } from './routes/_authenticated/admin/empreendimentos'
 import { Route as AuthenticatedAdminFinanceiroRouteImport } from './routes/_authenticated/admin/financeiro'
+import { Route as AuthenticatedAdminFornecedoresRouteImport } from './routes/_authenticated/admin/fornecedores'
 import { Route as AuthenticatedAdminOrcamentoRouteImport } from './routes/_authenticated/admin/orcamento'
 import { Route as AuthenticatedAdminRelatoriosRouteImport } from './routes/_authenticated/admin/relatorios'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal.index'
@@ -145,6 +146,12 @@ const AuthenticatedAdminFinanceiroRoute =
     path: '/financeiro',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminFornecedoresRoute =
+  AuthenticatedAdminFornecedoresRouteImport.update({
+    id: '/fornecedores',
+    path: '/fornecedores',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminOrcamentoRoute =
   AuthenticatedAdminOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -243,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/admin/crm': typeof AuthenticatedAdminCrmRoute
   '/admin/empreendimentos': typeof AuthenticatedAdminEmpreendimentosRouteWithChildren
   '/admin/financeiro': typeof AuthenticatedAdminFinanceiroRoute
+  '/admin/fornecedores': typeof AuthenticatedAdminFornecedoresRoute
   '/admin/orcamento': typeof AuthenticatedAdminOrcamentoRoute
   '/admin/relatorios': typeof AuthenticatedAdminRelatoriosRoute
   '/portal/comunicados': typeof AuthenticatedPortalComunicadosRoute
@@ -274,6 +282,7 @@ export interface FileRoutesByTo {
   '/admin/compras': typeof AuthenticatedAdminComprasRoute
   '/admin/crm': typeof AuthenticatedAdminCrmRoute
   '/admin/financeiro': typeof AuthenticatedAdminFinanceiroRoute
+  '/admin/fornecedores': typeof AuthenticatedAdminFornecedoresRoute
   '/admin/orcamento': typeof AuthenticatedAdminOrcamentoRoute
   '/admin/relatorios': typeof AuthenticatedAdminRelatoriosRoute
   '/portal/comunicados': typeof AuthenticatedPortalComunicadosRoute
@@ -309,6 +318,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/crm': typeof AuthenticatedAdminCrmRoute
   '/_authenticated/admin/empreendimentos': typeof AuthenticatedAdminEmpreendimentosRouteWithChildren
   '/_authenticated/admin/financeiro': typeof AuthenticatedAdminFinanceiroRoute
+  '/_authenticated/admin/fornecedores': typeof AuthenticatedAdminFornecedoresRoute
   '/_authenticated/admin/orcamento': typeof AuthenticatedAdminOrcamentoRoute
   '/_authenticated/admin/relatorios': typeof AuthenticatedAdminRelatoriosRoute
   '/_authenticated/portal/comunicados': typeof AuthenticatedPortalComunicadosRoute
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/admin/crm'
     | '/admin/empreendimentos'
     | '/admin/financeiro'
+    | '/admin/fornecedores'
     | '/admin/orcamento'
     | '/admin/relatorios'
     | '/portal/comunicados'
@@ -376,6 +387,7 @@ export interface FileRouteTypes {
     | '/admin/compras'
     | '/admin/crm'
     | '/admin/financeiro'
+    | '/admin/fornecedores'
     | '/admin/orcamento'
     | '/admin/relatorios'
     | '/portal/comunicados'
@@ -410,6 +422,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/crm'
     | '/_authenticated/admin/empreendimentos'
     | '/_authenticated/admin/financeiro'
+    | '/_authenticated/admin/fornecedores'
     | '/_authenticated/admin/orcamento'
     | '/_authenticated/admin/relatorios'
     | '/_authenticated/portal/comunicados'
@@ -583,6 +596,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminFinanceiroRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/fornecedores': {
+      id: '/_authenticated/admin/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/admin/fornecedores'
+      preLoaderRoute: typeof AuthenticatedAdminFornecedoresRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/orcamento': {
       id: '/_authenticated/admin/orcamento'
       path: '/orcamento'
@@ -700,6 +720,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminCrmRoute: typeof AuthenticatedAdminCrmRoute
   AuthenticatedAdminEmpreendimentosRoute: typeof AuthenticatedAdminEmpreendimentosRouteWithChildren
   AuthenticatedAdminFinanceiroRoute: typeof AuthenticatedAdminFinanceiroRoute
+  AuthenticatedAdminFornecedoresRoute: typeof AuthenticatedAdminFornecedoresRoute
   AuthenticatedAdminOrcamentoRoute: typeof AuthenticatedAdminOrcamentoRoute
   AuthenticatedAdminRelatoriosRoute: typeof AuthenticatedAdminRelatoriosRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -711,6 +732,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminEmpreendimentosRoute:
     AuthenticatedAdminEmpreendimentosRouteWithChildren,
   AuthenticatedAdminFinanceiroRoute: AuthenticatedAdminFinanceiroRoute,
+  AuthenticatedAdminFornecedoresRoute: AuthenticatedAdminFornecedoresRoute,
   AuthenticatedAdminOrcamentoRoute: AuthenticatedAdminOrcamentoRoute,
   AuthenticatedAdminRelatoriosRoute: AuthenticatedAdminRelatoriosRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,

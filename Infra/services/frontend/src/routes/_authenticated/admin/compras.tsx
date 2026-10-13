@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
-import { Plus, Trash2, X, ChevronDown, Search } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
+import { Plus, Trash2, X, ChevronDown, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
+import { useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchPurchase, useCreatePurchase, useDeletePurchase, useCreateQuote, usePatchQuote, useDeleteQuote } from "@/lib/hooks/useAdminData";
-import { brl, dateBR } from "@/lib/format";
+import { brl, dateBR, maskBRL, parseBRL } from "@/lib/format";
 import { quoteTotal } from "@/lib/data/admin-calculations";
 import { cn } from "@/lib/utils";
 import {
@@ -21,8 +22,8 @@ export const Route = createFileRoute("/_authenticated/admin/compras")({
   component: Compras,
 });
 
-const OBRA_TYPES = ["MO", "Material"];
-const OBRA_CATEGORIES = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
+const OBRA_TYPES_FB = ["MO", "Material"];
+const OBRA_CATEGORIES_FB = ["Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Segurança", "Outros"];
 
 const STAGES: PurchaseStatus[] = [
   "Solicitado", "Fornecedores Contatados", "Orçamento 1", "Orçamento 2", "Orçamento 3",
@@ -57,9 +58,9 @@ function QuoteRow({
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({
     supplier_name: quote.supplierName ?? suppliers.find((s) => s.id === quote.supplierId)?.name ?? "",
-    value: String(quote.value),
-    shipping: String(quote.shipping),
-    discount: String(quote.discount),
+    value: quote.value ? quote.value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00",
+    shipping: quote.shipping ? quote.shipping.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00",
+    discount: quote.discount ? quote.discount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00",
     payment: quote.payment,
     delivery: quote.delivery,
     validity: quote.validity,
@@ -100,18 +101,18 @@ function QuoteRow({
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Valor (R$)</label>
-          <input type="number" min="0" step="0.01" value={form.value} onChange={(e) => set("value", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.value} onChange={(e) => set("value", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Frete (R$)</label>
-          <input type="number" min="0" step="0.01" value={form.shipping} onChange={(e) => set("shipping", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.shipping} onChange={(e) => set("shipping", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Desconto (R$)</label>
-          <input type="number" min="0" step="0.01" value={form.discount} onChange={(e) => set("discount", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.discount} onChange={(e) => set("discount", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Forma de pagamento</label>
@@ -145,9 +146,9 @@ function QuoteRow({
             patchQuote.mutate({
               id: quote.id,
               ...(form.supplier_name ? { supplier_name: form.supplier_name } : {}),
-              value: parseFloat(form.value) || 0,
-              shipping: parseFloat(form.shipping) || 0,
-              discount: parseFloat(form.discount) || 0,
+              value: parseBRL(form.value),
+              shipping: parseBRL(form.shipping),
+              discount: parseBRL(form.discount),
               payment: form.payment,
               delivery: form.delivery,
               validity: form.validity,
@@ -173,7 +174,7 @@ function NewQuoteForm({ purchaseId, onDone }: { purchaseId: string; onDone: () =
   const createQuote = useCreateQuote();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    supplier_name: "", value: "", shipping: "0", discount: "0",
+    supplier_name: "", value: "", shipping: "0,00", discount: "0,00",
     payment: "", delivery: "", validity: today, notes: "", attachment_url: "",
   });
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
@@ -189,18 +190,18 @@ function NewQuoteForm({ purchaseId, onDone }: { purchaseId: string; onDone: () =
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Valor (R$) *</label>
-          <input type="number" min="0" step="0.01" value={form.value} onChange={(e) => set("value", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.value} onChange={(e) => set("value", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Frete (R$)</label>
-          <input type="number" min="0" step="0.01" value={form.shipping} onChange={(e) => set("shipping", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.shipping} onChange={(e) => set("shipping", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Desconto (R$)</label>
-          <input type="number" min="0" step="0.01" value={form.discount} onChange={(e) => set("discount", e.target.value)}
-            className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
+          <input type="text" inputMode="numeric" value={form.discount} onChange={(e) => set("discount", maskBRL(e.target.value))}
+            placeholder="0,00" className="mt-1 w-full border bg-background px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-muted-foreground">Pgto</label>
@@ -230,9 +231,9 @@ function NewQuoteForm({ purchaseId, onDone }: { purchaseId: string; onDone: () =
             createQuote.mutate({
               purchase_id: purchaseId,
               supplier_name: form.supplier_name.trim(),
-              value: parseFloat(form.value) || 0,
-              shipping: parseFloat(form.shipping) || 0,
-              discount: parseFloat(form.discount) || 0,
+              value: parseBRL(form.value),
+              shipping: parseBRL(form.shipping),
+              discount: parseBRL(form.discount),
               payment: form.payment,
               delivery: form.delivery,
               validity: form.validity,
@@ -276,18 +277,24 @@ function PurchaseDrawer({
   projects,
   suppliers,
   minQuotes,
+  obraCategories,
+  obraTypes,
   onClose,
 }: {
   purchase: Purchase | null;
   projects: { id: string; name: string }[];
   suppliers: { id: string; name: string }[];
   minQuotes: number;
+  obraCategories: string[];
+  obraTypes: string[];
   onClose: () => void;
 }) {
   const patchPurchase = usePatchPurchase();
   const deletePurchase = useDeletePurchase();
   const deleteQuote = useDeleteQuote();
   const [addingQuote, setAddingQuote] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [form, setForm] = useState<PurchaseForm>({
     desc: purchase?.description ?? "",
     qty: String(purchase?.quantity ?? ""),
@@ -296,8 +303,8 @@ function PurchaseDrawer({
     newStatus: purchase?.status ?? "Solicitado",
     is_operational: purchase?.isOperational ?? false,
     development_id: purchase?.projectId ?? projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
-    obra_type: purchase?.obraType ?? OBRA_TYPES[0]!,
-    obra_category: purchase?.obraCategory ?? OBRA_CATEGORIES[0]!,
+    obra_type: purchase?.obraType ?? obraTypes[0] ?? "",
+    obra_category: purchase?.obraCategory ?? obraCategories[0] ?? "",
     cnpj: purchase?.cnpj ?? "",
     recipient_name: purchase?.recipientName ?? "",
     attachment_url: purchase?.attachment ?? "",
@@ -349,7 +356,6 @@ function PurchaseDrawer({
   }
 
   function handleDelete() {
-    if (!confirm(`Excluir "${p.description}"?`)) return;
     deletePurchase.mutate(p.id, {
       onSuccess: () => { toast.success("Excluído."); onClose(); },
       onError: () => toast.error("Erro ao excluir."),
@@ -413,14 +419,14 @@ function PurchaseDrawer({
                   <label className="block text-xs text-muted-foreground">Tipo</label>
                   <select value={form.obra_type} onChange={(e) => setStr("obra_type", e.target.value)}
                     className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                    {OBRA_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    {obraTypes.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs text-muted-foreground">Categoria da obra</label>
                   <select value={form.obra_category} onChange={(e) => setStr("obra_category", e.target.value)}
                     className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                    {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                    {obraCategories.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -503,14 +509,6 @@ function PurchaseDrawer({
             </div>
           </section>
 
-          {/* Save details */}
-          <div>
-            <button onClick={saveDetails} disabled={patchPurchase.isPending}
-              className="bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-              {patchPurchase.isPending ? "Salvando…" : "Salvar alterações"}
-            </button>
-          </div>
-
           {/* Status */}
           <section>
             <h3 className="mb-3 text-sm font-semibold text-primary">Status</h3>
@@ -568,14 +566,37 @@ function PurchaseDrawer({
             </div>
           </section>
 
-          {/* Danger zone */}
-          <section className="border-t pt-4">
-            <button onClick={handleDelete}
-              className="flex items-center gap-2 border border-destructive/30 px-4 py-2 text-sm text-destructive hover:bg-destructive/5">
-              <Trash2 className="size-4" /> Excluir solicitação
-            </button>
-          </section>
         </div>
+        </div>
+
+        <div className="shrink-0 border-t bg-background px-5 py-3">
+          {showDeleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <input autoFocus value={deleteInput} onChange={(e) => setDeleteInput(e.target.value)}
+                placeholder="Digite EXCLUIR" className="flex-1 border bg-background px-3 py-2 text-sm" />
+              <button onClick={handleDelete} disabled={deleteInput !== "EXCLUIR" || deletePurchase.isPending}
+                className="bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-40">
+                Confirmar
+              </button>
+              <button onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                className="px-3 py-2 text-sm text-muted-foreground">×</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowDeleteConfirm(true)}
+                className="flex shrink-0 items-center gap-2 text-sm text-destructive">
+                <Trash2 className="size-4" /> Excluir
+              </button>
+              <button onClick={saveDetails} disabled={patchPurchase.isPending}
+                className={cn(
+                  "relative flex flex-1 items-center justify-center overflow-hidden py-2.5 text-sm font-semibold text-primary-foreground",
+                  "bg-primary disabled:opacity-60",
+                  "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+                )}>
+                <span className="relative z-10">{patchPurchase.isPending ? "Salvando…" : "Salvar"}</span>
+              </button>
+            </div>
+          )}
         </div>
       </DrawerContent>
     </Drawer>
@@ -584,135 +605,254 @@ function PurchaseDrawer({
 
 // ─── New purchase dialog ──────────────────────────────────────────────────────
 
-interface NewPurchaseForm {
-  development_id: string; description: string; quantity: string; unit: string;
-  estimate: string; requester: string; date: string; note: string;
-  is_operational: boolean; obra_type: string; obra_category: string;
-  cnpj: string; recipient_name: string; attachment_url: string;
+// ─── Inline supplier combobox (portal-based, same pattern as financeiro) ──────
+
+function QuoteSupplierSelect({
+  value, onChange,
+  contacts,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  contacts: { id: string; name: string; cnpj?: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selected = contacts.find((s) => s.id === value);
+  const filtered = query ? contacts.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())) : contacts;
+
+  function openDrop() {
+    const r = inputRef.current?.getBoundingClientRect();
+    if (r) setDropPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    setQuery("");
+    setOpen(true);
+  }
+  function pick(id: string) { onChange(id); setQuery(""); setOpen(false); }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium">Fornecedor / Cliente</label>
+      <div className="relative mt-1.5">
+        <input ref={inputRef} type="text"
+          value={open ? query : (selected?.name ?? "")}
+          onChange={(e) => { setQuery(e.target.value); if (!open) openDrop(); }}
+          onFocus={openDrop}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Buscar..."
+          className="w-full border bg-background px-3 py-2 text-sm" />
+        {value && (
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); pick(""); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <X className="size-3" />
+          </button>
+        )}
+      </div>
+      {open && createPortal(
+        <div style={{ position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+          className="max-h-48 overflow-y-auto border bg-card shadow-lg">
+          {filtered.map((s) => (
+            <button key={s.id} type="button" onMouseDown={() => pick(s.id)}
+              className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent/20", value === s.id && "bg-primary/10 text-primary")}>
+              <span className="flex-1 truncate">{s.name}</span>
+              {s.id.startsWith("lead:") ? <span className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">cliente</span>
+                : s.cnpj ? <span className="shrink-0 text-xs text-muted-foreground">{s.cnpj}</span> : null}
+            </button>
+          ))}
+          {filtered.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum resultado.</p>}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
 }
 
-function NewPurchaseDialog({ projects, onClose }: { projects: { id: string; name: string }[]; onClose: () => void }) {
+// ─── New purchase dialog ──────────────────────────────────────────────────────
+
+interface PendingQuote { supplierId: string; description: string; value: string }
+
+function NewPurchaseDialog({
+  projects, obraCategories, obraTypes, allContacts, onClose,
+}: {
+  projects: { id: string; name: string }[];
+  obraCategories: string[];
+  obraTypes: string[];
+  allContacts: { id: string; name: string; cnpj?: string }[];
+  onClose: () => void;
+}) {
   const createPurchase = useCreatePurchase();
+  const createQuote = useCreateQuote();
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState<NewPurchaseForm>({
-    development_id: projects[0]?.id ?? "", description: "", quantity: "1", unit: "serviço",
-    estimate: "", requester: "", date: today, note: "",
-    is_operational: false, obra_type: OBRA_TYPES[0]!, obra_category: OBRA_CATEGORIES[0]!,
-    cnpj: "", recipient_name: "", attachment_url: "",
+  const [form, setForm] = useState({
+    development_id: projects[0]?.id ?? "", description: "", quantity: "1",
+    requester: "", date: today,
+    is_operational: false, obra_type: obraTypes[0] ?? "", obra_category: obraCategories[0] ?? "",
   });
+  const [quotes, setQuotes] = useState<PendingQuote[]>([]);
+  const [newQ, setNewQ] = useState<PendingQuote>({ supplierId: "", description: "", value: "" });
+
   function set(k: string, v: string | boolean) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function addQuote() {
+    if (!newQ.supplierId || !newQ.value) { toast.error("Selecione fornecedor e informe o valor."); return; }
+    setQuotes((q) => [...q, newQ]);
+    setNewQ({ supplierId: "", description: "", value: "" });
+  }
+
+  function removeQuote(i: number) { setQuotes((q) => q.filter((_, idx) => idx !== i)); }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.description.trim() || (!form.is_operational && !form.development_id)) { toast.error("Preencha os campos obrigatórios."); return; }
+    if (!form.description.trim() || (!form.is_operational && !form.development_id)) {
+      toast.error("Preencha os campos obrigatórios."); return;
+    }
     try {
-      await createPurchase.mutateAsync({
+      const res = await createPurchase.mutateAsync({
         development_id: form.is_operational ? "fundo-md70" : form.development_id,
         description: form.description.trim(),
         quantity: parseFloat(form.quantity) || 1,
-        unit: form.unit || "serviço",
-        estimate: parseFloat(form.estimate) || 0,
+        unit: "serviço",
         date: form.date,
         is_operational: form.is_operational,
         ...(form.requester ? { requester: form.requester } : {}),
-        ...(form.note ? { note: form.note } : {}),
         ...(!form.is_operational ? { obra_type: form.obra_type, obra_category: form.obra_category } : {}),
-        ...(form.cnpj ? { cnpj: form.cnpj } : {}),
-        ...(form.recipient_name ? { recipient_name: form.recipient_name } : {}),
-        ...(form.attachment_url ? { attachment: form.attachment_url } : {}),
-      });
+      }) as { id: string };
+      for (const q of quotes) {
+        const supplierName = allContacts.find((s) => s.id === q.supplierId)?.name ?? q.supplierId;
+        await createQuote.mutateAsync({
+          purchase_id: res.id,
+          supplier_name: supplierName,
+          value: parseBRL(q.value),
+          shipping: 0, discount: 0,
+          ...(q.description ? { notes: q.description } : {}),
+        });
+      }
       toast.success("Solicitação criada.");
       onClose();
     } catch { toast.error("Erro ao criar."); }
   }
+
+  const isPending = createPurchase.isPending || createQuote.isPending;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/60 p-4" onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="my-8 w-full max-w-xl border bg-card p-6 shadow-xl">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-display text-2xl text-primary">Nova solicitação de compra</h2>
-          <button type="button" onClick={onClose}><X className="size-5 text-muted-foreground" /></button>
-        </div>
+    <Drawer open onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent className="flex max-h-[92vh] flex-col lg:left-[25%] lg:right-[25%]">
+        <DrawerHeader className="shrink-0 border-b pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <DrawerTitle className="font-display text-2xl text-primary">Nova solicitação de compra</DrawerTitle>
+            <DrawerClose asChild>
+              <button onClick={onClose}><X className="size-5 text-muted-foreground" /></button>
+            </DrawerClose>
+          </div>
+        </DrawerHeader>
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-5 p-5">
+              {/* Operational toggle */}
+              <label className="flex items-center justify-between gap-4 rounded border p-3">
+                <div>
+                  <p className="text-sm font-medium">Operacional do fundo</p>
+                  <p className="text-xs text-muted-foreground">{form.is_operational ? "Não vinculado a obra" : "Vinculado a empreendimento"}</p>
+                </div>
+                <Switch checked={form.is_operational} onCheckedChange={(v) => set("is_operational", v)} />
+              </label>
 
-        {/* Operational toggle */}
-        <label className="mb-4 flex items-center justify-between gap-4 rounded border p-3">
-          <div>
-            <p className="text-sm font-medium">Operacional do fundo</p>
-            <p className="text-xs text-muted-foreground">{form.is_operational ? "Não vinculado a obra" : "Vinculado a empreendimento"}</p>
-          </div>
-          <Switch checked={form.is_operational} onCheckedChange={(v) => set("is_operational", v)} />
-        </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {!form.is_operational && (
+                  <>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium">Empreendimento *</label>
+                      <select required value={form.development_id} onChange={(e) => set("development_id", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
+                        {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium">Tipo obra</label>
+                      <select value={form.obra_type} onChange={(e) => set("obra_type", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
+                        {obraTypes.map((t) => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium">Categoria da obra</label>
+                      <select value={form.obra_category} onChange={(e) => set("obra_category", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
+                        {obraCategories.map((c) => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </>
+                )}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium">Descrição *</label>
+                  <input required value={form.description} onChange={(e) => set("description", e.target.value)} maxLength={200} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Solicitante</label>
+                  <input value={form.requester} onChange={(e) => set("requester", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Data</label>
+                  <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Qtd</label>
+                  <input type="number" min="0.01" step="any" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                </div>
+              </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {!form.is_operational && (
-            <>
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium">Empreendimento *</label>
-                <select required value={form.development_id} onChange={(e) => set("development_id", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
+              {/* Orçamentos */}
               <div>
-                <label className="block text-sm font-medium">Tipo obra</label>
-                <select value={form.obra_type} onChange={(e) => set("obra_type", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-                  {OBRA_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
+                <p className="mb-2 text-sm font-semibold">Orçamentos</p>
+                {quotes.length > 0 && (
+                  <div className="mb-3 space-y-1">
+                    {quotes.map((q, i) => {
+                      const name = allContacts.find((s) => s.id === q.supplierId)?.name ?? q.supplierId;
+                      return (
+                        <div key={i} className="flex items-center gap-2 border px-3 py-2 text-sm">
+                          <span className="flex-1 truncate font-medium">{name}</span>
+                          {q.description && <span className="truncate text-xs text-muted-foreground">{q.description}</span>}
+                          <span className="num shrink-0 text-primary">{brl(parseBRL(q.value))}</span>
+                          <button type="button" onClick={() => removeQuote(i)}><X className="size-3.5 text-muted-foreground" /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="grid gap-3 border border-dashed p-3 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <QuoteSupplierSelect value={newQ.supplierId} onChange={(id) => setNewQ((q) => ({ ...q, supplierId: id }))} contacts={allContacts} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Detalhes</label>
+                    <input value={newQ.description} onChange={(e) => setNewQ((q) => ({ ...q, description: e.target.value }))} maxLength={200}
+                      className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="Obs sobre este orçamento" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Valor (R$)</label>
+                    <input type="text" inputMode="numeric" value={newQ.value} onChange={(e) => setNewQ((q) => ({ ...q, value: maskBRL(e.target.value) }))}
+                      placeholder="0,00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button type="button" onClick={addQuote}
+                      className="flex items-center gap-1.5 border px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent/20">
+                      <Plus className="size-3.5" /> Adicionar orçamento
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium">Categoria da obra</label>
-                <select value={form.obra_category} onChange={(e) => set("obra_category", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-                  {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-            </>
-          )}
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Descrição *</label>
-            <input required value={form.description} onChange={(e) => set("description", e.target.value)} maxLength={200} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Solicitante</label>
-            <input value={form.requester} onChange={(e) => set("requester", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+          <div className="shrink-0 border-t bg-background px-5 py-3">
+            <button type="submit" disabled={isPending}
+              className={cn(
+                "relative flex w-full items-center justify-center overflow-hidden py-2.5 text-sm font-semibold text-primary-foreground",
+                "bg-primary disabled:opacity-60",
+                "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+              )}>
+              <span className="relative z-10">{isPending ? "Criando…" : "Criar solicitação"}</span>
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Data</label>
-            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Qtd</label>
-            <input type="number" min="0.01" step="any" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Unidade</label>
-            <input value={form.unit} onChange={(e) => set("unit", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Estimativa (R$)</label>
-            <input type="number" min="0" step="0.01" value={form.estimate} onChange={(e) => set("estimate", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Observações</label>
-            <input value={form.note} onChange={(e) => set("note", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">CNPJ / CPF</label>
-            <input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} maxLength={18} placeholder="00.000.000/0000-00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Nome / Razão social</label>
-            <input value={form.recipient_name} onChange={(e) => set("recipient_name", e.target.value)} maxLength={200} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Nota fiscal / Recibo (URL)</label>
-            <input type="url" value={form.attachment_url} onChange={(e) => set("attachment_url", e.target.value)} placeholder="https://…" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="border px-5 py-2.5 text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
-          <button type="submit" disabled={createPurchase.isPending} className="bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {createPurchase.isPending ? "Criando…" : "Criar"}
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -725,6 +865,11 @@ function Compras() {
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [openStages, setOpenStages] = useState<Set<string>>(new Set());
+
+  const allContacts = useMemo(() => [
+    ...data.suppliers,
+    ...data.leads.map(l => ({ id: `lead:${l.id}`, name: l.name, cnpj: l.cpf })),
+  ], [data.suppliers, data.leads]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -761,28 +906,44 @@ function Compras() {
 
   return (
     <>
-      <AdminHeading title="Compras">Necessidade → Cotação → Aprovação → Entrega.</AdminHeading>
-
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <label>
-          Empreendimento{" "}
-          <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="ml-2 border bg-background px-3 py-2">
-            <option value="all">Todos</option>
-            {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar compra..."
-            className="border bg-background pl-8 pr-3 py-2 text-sm w-40 sm:w-52"
-          />
+      <div className="sticky top-16 z-10 -mx-4 mb-6 border-b bg-background/95 px-4 pb-3 pt-3 backdrop-blur md:-mx-8 md:px-8">
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar compra..."
+                className="w-full border bg-background pl-8 pr-3 py-2 text-sm"
+              />
+            </div>
+            <label className="shrink-0">
+              <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="border bg-background px-3 py-2 text-sm">
+                <option value="all">Todos</option>
+                {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+            <button className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center bg-primary text-primary-foreground",
+              "relative overflow-hidden",
+              "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+            )}>
+              <Filter className="relative z-10 size-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => setShowNew(true)}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 bg-primary py-3 text-sm font-semibold text-primary-foreground",
+              "relative overflow-hidden",
+              "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+            )}
+          >
+            <Plus className="relative z-10 size-4" />
+            <span className="relative z-10">Nova solicitação</span>
+          </button>
         </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          <Plus className="size-4" /> Nova solicitação
-        </button>
       </div>
 
       {/* Mobile: collapsible stacked cards */}
@@ -839,10 +1000,18 @@ function Compras() {
         projects={data.projects}
         suppliers={data.suppliers}
         minQuotes={data.minQuotes}
+        obraCategories={data.obraCategories ?? OBRA_CATEGORIES_FB}
+        obraTypes={data.obraTypes ?? OBRA_TYPES_FB}
         onClose={() => setSelected(null)}
       />
 
-      {showNew && <NewPurchaseDialog projects={data.projects.filter(p => p.id !== 'fundo-md70')} onClose={() => setShowNew(false)} />}
+      {showNew && <NewPurchaseDialog
+        projects={data.projects.filter(p => p.id !== 'fundo-md70')}
+        obraCategories={data.obraCategories ?? OBRA_CATEGORIES_FB}
+        obraTypes={data.obraTypes ?? OBRA_TYPES_FB}
+        allContacts={allContacts}
+        onClose={() => setShowNew(false)}
+      />}
     </>
   );
 }

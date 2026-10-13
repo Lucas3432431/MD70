@@ -1,7 +1,7 @@
 import { Link, useRouterState, useNavigate, Outlet } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { LayoutDashboard, Building2, LogOut, Wallet, BarChart3, ShoppingCart, Users } from "lucide-react";
+import { LayoutDashboard, Building2, LogOut, Wallet, BarChart3, ShoppingCart, Users, Truck } from "lucide-react";
 import { Logo } from "@/components/site/Logo";
 import { Button } from "@/components/ui/button";
 import { useAdminData } from "@/lib/hooks/useAdminData";
@@ -11,12 +11,13 @@ import { cn } from "@/lib/utils";
 import { AdminFloatingChat } from "./AdminFloatingChat";
 
 const links = [
-  { to: "/admin",                label: "Dashboard",      short: "Dashboard",  icon: LayoutDashboard },
-  { to: "/admin/empreendimentos",label: "Projetos",       short: "Projetos",   icon: Building2 },
-  { to: "/admin/compras",        label: "Compras",        short: "Compras",    icon: ShoppingCart },
-  { to: "/admin/crm",            label: "CRM",            short: "CRM",        icon: Users },
-  { to: "/admin/relatorios",     label: "Relatórios",     short: "Relatórios", icon: BarChart3 },
-  { to: "/admin/financeiro",     label: "Lançamentos",    short: "Lançamentos",icon: Wallet },
+  { to: "/admin",                  label: "Dashboard",      short: "Dashboard",    icon: LayoutDashboard },
+  { to: "/admin/empreendimentos",  label: "Projetos",       short: "Projetos",     icon: Building2 },
+  { to: "/admin/fornecedores",     label: "Fornecedores",   short: "Fornec.",      icon: Truck },
+  { to: "/admin/compras",          label: "Compras",        short: "Compras",      icon: ShoppingCart },
+  { to: "/admin/crm",              label: "CRM",            short: "CRM",          icon: Users },
+  { to: "/admin/relatorios",       label: "Relatórios",     short: "Relatórios",   icon: BarChart3 },
+  { to: "/admin/financeiro",       label: "Lançamentos",    short: "Lançamentos",  icon: Wallet },
 ] as const;
 
 type AdminContextValue = { data: AdminData; setData: React.Dispatch<React.SetStateAction<AdminData>> };
@@ -108,7 +109,7 @@ function AdminWorkspace({ initialData, isPending, isError }: { initialData: Admi
 
         {/* Bottom nav — compact */}
         <nav aria-label="Navegação administrativa" className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-          <div className="mx-auto grid h-11 grid-cols-6 px-1 md:flex md:h-12 md:items-stretch md:justify-center md:gap-1 md:px-8">
+          <div className="mx-auto grid h-11 grid-cols-7 px-1 md:flex md:h-12 md:items-stretch md:justify-center md:gap-1 md:px-8">
             {links.map(({ to, label, short, icon: Icon }) => {
               const active = to === "/admin" ? pathname === to : pathname.startsWith(to);
               const badgeCount = badges[to as keyof typeof badges] ?? 0;

@@ -5,6 +5,7 @@ TODO: Add proper authentication (TOTP or session-based) before production deploy
       Currently all endpoints are open (dev mode).
 """
 
+from datetime import date, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -15,6 +16,28 @@ from App.Core.Logs import info, error
 
 router = APIRouter(prefix="/api/portal-admin", tags=["admin-md70"])
 public_router = APIRouter(prefix="/api/public", tags=["public-md70"])
+
+# ---------------------------------------------------------------------------
+# Shared lookup lists (single source of truth — edit here to add categories)
+# ---------------------------------------------------------------------------
+
+OBRA_TYPES: list[str] = ["MO", "Material"]
+
+OBRA_CATEGORIES: list[str] = [
+    "Alvenaria",
+    "Aprovação",
+    "Aquisição do imóvel",
+    "Capital",
+    "Custo recorrente",
+    "Elétrica",
+    "Fundação",
+    "Hidráulica",
+    "Mão de obra",
+    "Máquinas e equipamentos",
+    "Projetos",
+    "Segurança",
+    "Outros",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -41,12 +64,23 @@ async def get_admin_data():
                                      purchases, movements, leads }
     """
     engine = database.engine
+    # Ensure CDI rates table exists (own connection so it never conflicts with ALTER TABLE migrations)
+    try:
+        with engine.connect() as _mig:
+            _mig.execute(text(
+                "CREATE TABLE IF NOT EXISTS md70_cdi_rates "
+                "(id TEXT PRIMARY KEY NOT NULL, month TEXT NOT NULL UNIQUE, "
+                "rate REAL NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+            ))
+            _mig.commit()
+    except Exception:
+        pass
     try:
         with engine.connect() as conn:
             # -- projects --
             rows = conn.execute(text(
                 "SELECT id, name, status, progress, capital, budget, remaining, forecast, image_url, "
-                "       city, category, summary "
+                "       city, category, summary, vgv "
                 "FROM md70_developments ORDER BY created_at"
             )).fetchall()
             projects = [
@@ -55,6 +89,7 @@ async def get_admin_data():
                     "progress": r[3], "capital": r[4], "budget": r[5],
                     "remaining": r[6], "forecast": r[7], "imageUrl": r[8],
                     "city": r[9], "category": r[10], "summary": r[11],
+                    "vgv": r[12],
                 }
                 for r in rows
             ]
@@ -130,11 +165,22 @@ async def get_admin_data():
                         "notes": r[9], "attachment": r[10],
                     })
 
+            # -- idempotent migrations --
+            for _sql in [
+                "ALTER TABLE md70_movements ADD COLUMN supplier_id TEXT REFERENCES md70_suppliers(id)",
+                "ALTER TABLE md70_leads ADD COLUMN cpf TEXT",
+            ]:
+                try:
+                    conn.execute(text(_sql))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+
             # -- movements (without attachments first) --
             rows = conn.execute(text(
                 "SELECT id, development_id, purchase_id, date, description, category, "
                 "       direction, value, status, date_competencia, "
-                "       is_operational, obra_type, obra_category, cnpj, recipient_name "
+                "       is_operational, obra_type, obra_category, cnpj, recipient_name, supplier_id "
                 "FROM md70_movements ORDER BY date DESC"
             )).fetchall()
             movements_map: dict = {}
@@ -150,6 +196,7 @@ async def get_admin_data():
                     "obraCategory": r[12],
                     "cnpj": r[13],
                     "recipientName": r[14],
+                    "supplierId": r[15],
                     "attachments": [],
                 }
                 movements_map[r[0]] = m
@@ -167,7 +214,7 @@ async def get_admin_data():
             # -- leads --
             rows = conn.execute(text(
                 "SELECT id, name, email, phone, project_interest, status, "
-                "       source, value, notes, created_at, project_interests_json "
+                "       source, value, notes, created_at, project_interests_json, cpf "
                 "FROM md70_leads ORDER BY created_at DESC"
             )).fetchall()
             import json as _json2
@@ -185,7 +232,17 @@ async def get_admin_data():
                     "projectInterest": r[4], "status": r[5], "source": r[6],
                     "value": r[7], "notes": r[8], "createdAt": r[9],
                     "projectInterests": project_interests,
+                    "cpf": r[11],
                 })
+
+            # -- CDI rates --
+            try:
+                cdi_rows = conn.execute(text(
+                    "SELECT month, rate FROM md70_cdi_rates ORDER BY month DESC"
+                )).fetchall()
+                cdi_rates = [{"yearMonth": r[0], "rate": r[1]} for r in cdi_rows]
+            except Exception:
+                cdi_rates = []
 
         with engine.connect() as aum_conn:
             aum_data = _calc_aum(aum_conn)
@@ -199,6 +256,9 @@ async def get_admin_data():
             "leads": leads,
             "aumCurrent": aum_data["aum_current"],
             "aumRatePerSecond": aum_data["rate_per_second"],
+            "cdiRates": cdi_rates,
+            "obraCategories": OBRA_CATEGORIES,
+            "obraTypes": OBRA_TYPES,
         }
 
     except Exception as exc:
@@ -220,6 +280,7 @@ class LeadPatch(BaseModel):
     phone: Optional[str] = None
     source: Optional[str] = None
     project_interest: Optional[str] = None
+    cpf: Optional[str] = None
 
 
 @router.patch("/leads/{lead_id}")
@@ -237,7 +298,7 @@ async def patch_lead(lead_id: str, body: LeadPatch):
     import json as _json3
     set_parts = ["updated_at = CURRENT_TIMESTAMP"]
     params: dict = {"id": lead_id}
-    scalar_lead = {"status": "status", "notes": "notes", "value": "value", "name": "name", "email": "email", "phone": "phone", "source": "source", "project_interest": "project_interest"}
+    scalar_lead = {"status": "status", "notes": "notes", "value": "value", "name": "name", "email": "email", "phone": "phone", "source": "source", "project_interest": "project_interest", "cpf": "cpf"}
     for attr, col in scalar_lead.items():
         val = getattr(body, attr)
         if val is not None:
@@ -435,6 +496,7 @@ class ProjectPatch(BaseModel):
     planned_progress: Optional[int] = None
     current_stage: Optional[str] = None
     next_stage: Optional[str] = None
+    vgv: Optional[float] = None
 
 
 @router.patch("/projects/{project_id}")
@@ -443,7 +505,7 @@ async def patch_project(project_id: str, body: ProjectPatch):
     engine = database.engine
     set_parts = ["updated_at = CURRENT_TIMESTAMP"]
     params: dict = {"id": project_id}
-    field_map = {"name": "name", "city": "city", "status": "status", "progress": "progress", "capital": "capital", "budget": "budget", "remaining": "remaining", "forecast": "forecast", "image_url": "image_url", "category": "category", "summary": "summary", "planned_progress": "planned_progress", "current_stage": "current_stage", "next_stage": "next_stage"}
+    field_map = {"name": "name", "city": "city", "status": "status", "progress": "progress", "capital": "capital", "budget": "budget", "remaining": "remaining", "forecast": "forecast", "image_url": "image_url", "category": "category", "summary": "summary", "planned_progress": "planned_progress", "current_stage": "current_stage", "next_stage": "next_stage", "vgv": "vgv"}
     for field, col in field_map.items():
         val = getattr(body, field)
         if val is not None:
@@ -474,6 +536,7 @@ class LeadCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    cpf: Optional[str] = None
     project_interest: Optional[str] = None
     status: Optional[str] = "Interesse"
     source: Optional[str] = None
@@ -490,9 +553,9 @@ async def create_lead(body: LeadCreate):
     try:
         with engine.connect() as conn:
             conn.execute(text(
-                "INSERT INTO md70_leads (id, name, email, phone, project_interest, status, source, value, notes) "
-                "VALUES (:id, :name, :email, :phone, :project_interest, :status, :source, :value, :notes)"
-            ), {"id": lead_id, "name": body.name, "email": body.email, "phone": body.phone, "project_interest": body.project_interest, "status": body.status, "source": body.source, "value": body.value or 0, "notes": body.notes})
+                "INSERT INTO md70_leads (id, name, email, phone, cpf, project_interest, status, source, value, notes) "
+                "VALUES (:id, :name, :email, :phone, :cpf, :project_interest, :status, :source, :value, :notes)"
+            ), {"id": lead_id, "name": body.name, "email": body.email, "phone": body.phone, "cpf": body.cpf, "project_interest": body.project_interest, "status": body.status, "source": body.source, "value": body.value or 0, "notes": body.notes})
             conn.commit()
         info(f"[AdminRoutes] Lead created: {lead_id}")
         return {"ok": True, "id": lead_id}
@@ -556,8 +619,7 @@ class MovementCreate(BaseModel):
     is_operational: Optional[bool] = False
     obra_type: Optional[str] = None
     obra_category: Optional[str] = None
-    cnpj: Optional[str] = None
-    recipient_name: Optional[str] = None
+    supplier_id: Optional[str] = None
 
 
 @router.post("/movements", status_code=201)
@@ -573,12 +635,26 @@ async def create_movement(body: MovementCreate):
     dev_id = body.development_id or ("fundo-md70" if body.is_operational else None)
     if not dev_id:
         raise HTTPException(status_code=422, detail="development_id é obrigatório para movimentos de empreendimento.")
+
+    cnpj = None
+    recipient = None
+    # If supplier_id provided, pull cnpj/name from suppliers table
+    if body.supplier_id:
+        try:
+            with engine.connect() as _sc:
+                sup = _sc.execute(text("SELECT name, cnpj FROM md70_suppliers WHERE id = :id"), {"id": body.supplier_id}).fetchone()
+                if sup:
+                    recipient = sup[0]
+                    cnpj = sup[1] or cnpj
+        except Exception:
+            pass
+
     try:
         with engine.connect() as conn:
             conn.execute(text(
                 "INSERT INTO md70_movements "
-                "(id, development_id, purchase_id, date, date_competencia, description, category, direction, value, status, is_operational, obra_type, obra_category, cnpj, recipient_name) "
-                "VALUES (:id, :dev_id, :purchase_id, :date, :date_competencia, :desc, :category, :direction, :value, :status, :is_op, :obra_type, :obra_cat, :cnpj, :recipient)"
+                "(id, development_id, purchase_id, date, date_competencia, description, category, direction, value, status, is_operational, obra_type, obra_category, cnpj, recipient_name, supplier_id) "
+                "VALUES (:id, :dev_id, :purchase_id, :date, :date_competencia, :desc, :category, :direction, :value, :status, :is_op, :obra_type, :obra_cat, :cnpj, :recipient, :sup_id)"
             ), {
                 "id": movement_id, "dev_id": dev_id, "purchase_id": body.purchase_id,
                 "date": movement_date, "date_competencia": body.date_competencia,
@@ -586,7 +662,8 @@ async def create_movement(body: MovementCreate):
                 "direction": body.direction, "value": body.value, "status": body.status,
                 "is_op": 1 if body.is_operational else 0,
                 "obra_type": body.obra_type, "obra_cat": body.obra_category,
-                "cnpj": body.cnpj, "recipient": body.recipient_name,
+                "cnpj": cnpj, "recipient": recipient,
+                "sup_id": body.supplier_id,
             })
             conn.commit()
         info(f"[AdminRoutes] Movement created: {movement_id}")
@@ -612,8 +689,9 @@ class MovementPatch(BaseModel):
     is_operational: Optional[bool] = None
     obra_type: Optional[str] = None
     obra_category: Optional[str] = None
-    cnpj: Optional[str] = None
+    supplier_id: Optional[str] = None
     recipient_name: Optional[str] = None
+    attachment_url: Optional[str] = None
 
 
 @router.patch("/movements/{movement_id}")
@@ -622,7 +700,7 @@ async def patch_movement(movement_id: str, body: MovementPatch):
     engine = database.engine
     set_parts = ["updated_at = CURRENT_TIMESTAMP"]
     params: dict = {"id": movement_id}
-    scalar_fields = ["date", "date_competencia", "description", "category", "direction", "value", "status", "development_id", "obra_type", "obra_category", "cnpj", "recipient_name"]
+    scalar_fields = ["date", "date_competencia", "description", "category", "direction", "value", "status", "development_id", "obra_type", "obra_category", "supplier_id", "recipient_name"]
     for field in scalar_fields:
         val = getattr(body, field)
         if val is not None:
@@ -631,6 +709,9 @@ async def patch_movement(movement_id: str, body: MovementPatch):
     if body.is_operational is not None:
         set_parts.append("is_operational = :is_op")
         params["is_op"] = 1 if body.is_operational else 0
+    if body.attachment_url is not None:
+        set_parts.append("attachment = :attachment")
+        params["attachment"] = body.attachment_url
     if len(set_parts) == 1:
         raise HTTPException(status_code=400, detail="Nenhum campo fornecido.")
     sql = f"UPDATE md70_movements SET {', '.join(set_parts)} WHERE id = :id"
@@ -890,32 +971,272 @@ async def delete_quote(quote_id: str):
 
 
 # ---------------------------------------------------------------------------
+# CRUD /api/portal-admin/suppliers
+# ---------------------------------------------------------------------------
+
+class SupplierCreate(BaseModel):
+    name: str
+    cnpj: Optional[str] = None
+    contact: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplierPatch(BaseModel):
+    name: Optional[str] = None
+    cnpj: Optional[str] = None
+    contact: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.post("/suppliers", status_code=201)
+async def create_supplier(body: SupplierCreate):
+    import uuid as _uuid
+    sup_id = "sup-" + _uuid.uuid4().hex[:10]
+    engine = database.engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO md70_suppliers (id, name, cnpj, contact, phone, email, notes) "
+                "VALUES (:id, :name, :cnpj, :contact, :phone, :email, :notes)"
+            ), {"id": sup_id, "name": body.name.strip(), "cnpj": body.cnpj, "contact": body.contact, "phone": body.phone, "email": body.email, "notes": body.notes})
+            conn.commit()
+        return {"ok": True, "id": sup_id}
+    except Exception as exc:
+        error(f"[AdminRoutes] POST /suppliers error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno ao criar fornecedor.")
+
+
+@router.patch("/suppliers/{supplier_id}")
+async def patch_supplier(supplier_id: str, body: SupplierPatch):
+    engine = database.engine
+    set_parts: list[str] = []
+    params: dict = {"id": supplier_id}
+    for field in ["name", "cnpj", "contact", "phone", "email", "notes"]:
+        val = getattr(body, field)
+        if val is not None:
+            set_parts.append(f"{field} = :{field}")
+            params[field] = val
+    if not set_parts:
+        return {"ok": True, "id": supplier_id}
+    sql = f"UPDATE md70_suppliers SET {', '.join(set_parts)} WHERE id = :id"
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(sql), params)
+            conn.commit()
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
+        return {"ok": True, "id": supplier_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error(f"[AdminRoutes] PATCH /suppliers/{supplier_id} error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno ao atualizar fornecedor.")
+
+
+@router.delete("/suppliers/{supplier_id}", status_code=200)
+async def delete_supplier(supplier_id: str):
+    engine = database.engine
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("DELETE FROM md70_suppliers WHERE id = :id"), {"id": supplier_id})
+            conn.commit()
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
+        return {"ok": True, "id": supplier_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error(f"[AdminRoutes] DELETE /suppliers/{supplier_id} error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno ao deletar fornecedor.")
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/portal-admin/cdi/{year_month} — upsert CDI rate for a month
+# ---------------------------------------------------------------------------
+
+class CdiRatePatch(BaseModel):
+    rate: float
+
+
+@router.put("/cdi/{year_month}", status_code=200)
+async def upsert_cdi_rate(year_month: str, body: CdiRatePatch):
+    """Create or update the CDI effective rate for a given year-month (YYYY-MM)."""
+    engine = database.engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO md70_cdi_rates (id, month, rate) VALUES (:id, :ym, :r) "
+                "ON CONFLICT(month) DO UPDATE SET rate = excluded.rate"
+            ), {"id": year_month, "ym": year_month, "r": body.rate})
+            conn.commit()
+        info(f"[AdminRoutes] CDI rate upserted: {year_month} = {body.rate}%")
+        return {"ok": True, "yearMonth": year_month, "rate": body.rate}
+    except Exception as exc:
+        error(f"[AdminRoutes] PUT /cdi/{year_month} error: {exc}")
+        raise HTTPException(status_code=500, detail="Erro interno ao salvar CDI.")
+
+
+# ---------------------------------------------------------------------------
 # AUM helpers — shared between admin and public endpoints
 # ---------------------------------------------------------------------------
 
-_CDI_MONTHLY_RATE = 0.01          # 1 % a.m.
-_SECONDS_PER_MONTH = 30.44 * 24 * 3600  # ≈ 2,630,016
+_CDI_MONTHLY_RATE = 0.01          # 1 % a.m.  (kept for reference, no longer used by _calc_aum)
+_SECONDS_PER_MONTH = 30.44 * 24 * 3600  # ≈ 2,630,016  (kept for reference)
+
+
+# ---------------------------------------------------------------------------
+# Brazilian banking calendar helpers
+# ---------------------------------------------------------------------------
+
+def _easter(year: int) -> date:
+    """Computus algorithm — returns Easter Sunday for the given year."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+_holidays_cache: dict = {}
+
+
+def _br_holidays(year: int) -> frozenset:
+    if year in _holidays_cache:
+        return _holidays_cache[year]
+    e = _easter(year)
+    h = {
+        date(year, 1, 1),
+        e - timedelta(days=2),       # Sexta-feira Santa
+        e + timedelta(days=60),      # Corpus Christi
+        date(year, 4, 21),
+        date(year, 5, 1),
+        date(year, 9, 7),
+        date(year, 10, 12),
+        date(year, 11, 2),
+        date(year, 11, 15),
+        date(year, 12, 25),
+        e - timedelta(days=47),      # Carnival Tuesday
+    }
+    if year >= 2024:
+        h.add(date(year, 11, 20))    # Consciência Negra
+    result = frozenset(h)
+    _holidays_cache[year] = result
+    return result
+
+
+def _is_business_day(d: date) -> bool:
+    return d.weekday() < 5 and d not in _br_holidays(d.year)
+
+
+def _count_bdays(start: date, end_exclusive: date) -> int:
+    """Count Brazilian banking business days in [start, end_exclusive)."""
+    count = 0
+    cur = start
+    while cur < end_exclusive:
+        if _is_business_day(cur):
+            count += 1
+        cur += timedelta(days=1)
+    return count
+
+
+def _cdi_factor(start: date, end: date, rate_map: dict) -> float:
+    """
+    Accumulate CDI factor from start (inclusive) to end (exclusive).
+    rate_map: {year_month_str: float} where float is monthly rate as decimal (e.g. 0.0107).
+    Uses business-day-proportional compounding per month.
+    """
+    factor = 1.0
+    cur = start
+    while cur < end:
+        ym = f"{cur.year}-{cur.month:02d}"
+        monthly_rate = rate_map.get(ym, 0.0)
+        # month boundaries
+        if cur.month == 12:
+            next_month = date(cur.year + 1, 1, 1)
+        else:
+            next_month = date(cur.year, cur.month + 1, 1)
+        month_start = date(cur.year, cur.month, 1)
+        total_bdays = _count_bdays(month_start, next_month)
+        period_end = min(end, next_month)
+        bdays = _count_bdays(cur, period_end)
+        if total_bdays > 0 and bdays > 0 and monthly_rate > 0:
+            daily = (1 + monthly_rate) ** (1.0 / total_bdays) - 1
+            factor *= (1 + daily) ** bdays
+        cur = next_month
+    return factor
 
 
 def _calc_aum(conn) -> dict:
     """
-    Returns base AUM (Capital Realizado movements) plus CDI accrued since the
-    first second of the current calendar month.
+    Returns base AUM (Capital Realizado movements) plus CDI accrued per-investment
+    using actual monthly CDI rates from the md70_cdi_rates table and a Brazilian
+    banking calendar for business-day-proportional compounding.
     """
     from datetime import datetime, timezone
 
-    row = conn.execute(text(
-        "SELECT COALESCE(SUM(CASE WHEN direction = 'Entrada' THEN value ELSE -value END), 0) AS aum "
-        "FROM md70_movements WHERE status = 'Realizado' AND category = 'Capital'"
-    )).fetchone()
-    base_aum = float(row[0]) if row else 0.0
+    # Load CDI rates
+    try:
+        rows = conn.execute(text("SELECT month, rate FROM md70_cdi_rates")).fetchall()
+        rate_map = {r[0]: r[1] / 100.0 for r in rows}
+    except Exception:
+        rate_map = {}
 
+    # Fetch all Capital/Realizado movements with their dates
+    rows = conn.execute(text(
+        "SELECT date, direction, value FROM md70_movements "
+        "WHERE status = 'Realizado' AND category = 'Capital'"
+    )).fetchall()
+
+    today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    elapsed_seconds = (now - month_start).total_seconds()
 
-    rate_per_second = base_aum * _CDI_MONTHLY_RATE / _SECONDS_PER_MONTH
-    aum_current = base_aum + rate_per_second * elapsed_seconds
+    base_aum = 0.0
+    cdi_aum = 0.0
+    for r in rows:
+        mv_date_str, direction, value = r[0], r[1], float(r[2])
+        signed = value if direction == "Entrada" else -value
+        base_aum += signed
+        try:
+            mv_date = date.fromisoformat(mv_date_str[:10])
+            if mv_date < today and signed > 0:
+                factor = _cdi_factor(mv_date, today, rate_map)
+                cdi_aum += signed * factor
+            else:
+                cdi_aum += signed
+        except Exception:
+            cdi_aum += signed
+
+    month_start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elapsed_seconds = (now - month_start_dt).total_seconds()
+
+    # Current month's CDI ticker: cdi_aum grows at daily rate within current month
+    today_ym = f"{today.year}-{today.month:02d}"
+    cur_monthly = rate_map.get(today_ym, 0.01)
+    if today.month == 12:
+        next_mo = date(today.year + 1, 1, 1)
+    else:
+        next_mo = date(today.year, today.month + 1, 1)
+    month_start_date = date(today.year, today.month, 1)
+    total_bdays_cur = _count_bdays(month_start_date, next_mo)
+    daily_rate = (1 + cur_monthly) ** (1.0 / max(total_bdays_cur, 21)) - 1
+    seconds_per_day = 86400
+    rate_per_second = cdi_aum * daily_rate / seconds_per_day
+
+    aum_current = cdi_aum + rate_per_second * elapsed_seconds
 
     return {
         "aum": base_aum,

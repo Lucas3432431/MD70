@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { ChevronDown, Pencil, X, Check } from "lucide-react";
+import { ChevronDown, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
-import { usePatchProject, usePatchBudgetLine } from "@/lib/hooks/useAdminData";
+import { usePatchProject } from "@/lib/hooks/useAdminData";
 import { projectSummary, sum } from "@/lib/data/admin-calculations";
-import { brl, dateBR } from "@/lib/format";
+import { brl, dateBR, maskBRL, parseBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AdminProject, BudgetLine, ProjectStage } from "@/lib/data/admin-types";
 
@@ -36,7 +36,8 @@ function EditForm({ project, onClose }: { project: AdminProject; onClose: () => 
     city: project.city ?? "",
     status: project.status,
     category: project.category ?? "",
-    budget: String(project.budget ?? 0),
+    budget: project.budget ? (project.budget).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
+    vgv: project.vgv ? (project.vgv).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     forecast: project.forecast ?? "",
     image_url: project.imageUrl ?? "",
     summary: project.summary ?? "",
@@ -56,7 +57,8 @@ function EditForm({ project, onClose }: { project: AdminProject; onClose: () => 
         city: form.city,
         status: form.status,
         category: form.category || null,
-        budget: parseFloat(form.budget) || 0,
+        budget: parseBRL(form.budget),
+        vgv: parseBRL(form.vgv),
         forecast: form.forecast || null,
         image_url: form.image_url || null,
         summary: form.summary || null,
@@ -121,10 +123,14 @@ function EditForm({ project, onClose }: { project: AdminProject; onClose: () => 
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium">Forecast (R$)</label>
-            <input type="number" min="0" step="1000" value={form.budget} onChange={(e) => set("budget", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-            <p className="mt-1 text-xs text-muted-foreground">Estimativa inicial no começo da obra.</p>
+            <label className="block text-sm font-medium">Cost Forecast (R$)</label>
+            <input type="text" inputMode="numeric" value={form.budget} onChange={(e) => set("budget", maskBRL(e.target.value))}
+              placeholder="0,00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">VGV (R$)</label>
+            <input type="text" inputMode="numeric" value={form.vgv} onChange={(e) => set("vgv", maskBRL(e.target.value))}
+              placeholder="0,00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium">Previsão de conclusão</label>
@@ -149,86 +155,18 @@ function EditForm({ project, onClose }: { project: AdminProject; onClose: () => 
   );
 }
 
-// ─── Editable budget row ──────────────────────────────────────────────────────
+// ─── Budget row ───────────────────────────────────────────────────────────────
 
-function BudgetRow({
-  b,
-  realized,
-  committed,
-}: {
-  b: BudgetLine;
-  realized: number;
-  committed: number;
-}) {
-  const patchLine = usePatchBudgetLine();
-  const [editPlanned, setEditPlanned] = useState(false);
-  const [editRemaining, setEditRemaining] = useState(false);
-  const [plannedVal, setPlannedVal] = useState(String(b.planned));
-  const [remainingVal, setRemainingVal] = useState(String(b.remaining));
-
-  const forecast = realized + committed + (parseFloat(remainingVal) || b.remaining);
+function BudgetRow({ b, realized, committed }: { b: BudgetLine; realized: number; committed: number }) {
+  const forecast = realized + committed + b.remaining;
   const saldo = forecast - realized;
-
-  function savePlanned() {
-    const v = parseFloat(plannedVal);
-    if (!isNaN(v) && v !== b.planned) {
-      patchLine.mutate({ id: b.id, planned: v }, {
-        onSuccess: () => toast.success("Orçado atualizado."),
-        onError: () => { toast.error("Erro ao salvar."); setPlannedVal(String(b.planned)); },
-      });
-    }
-    setEditPlanned(false);
-  }
-
-  function saveRemaining() {
-    const v = parseFloat(remainingVal);
-    if (!isNaN(v) && v !== b.remaining) {
-      patchLine.mutate({ id: b.id, remaining: v }, {
-        onSuccess: () => toast.success("Forecast atualizado."),
-        onError: () => { toast.error("Erro ao salvar."); setRemainingVal(String(b.remaining)); },
-      });
-    }
-    setEditRemaining(false);
-  }
-
   return (
     <tr className="border-t">
       <td className="p-3 font-medium">{b.category} / {b.item}</td>
-      {/* Projeção = realizado + comprometido + restante — restante editable */}
-      <td className="num p-3">
-        {editRemaining ? (
-          <div className="flex items-center gap-1">
-            <input type="number" autoFocus value={remainingVal} onChange={(e) => setRemainingVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") saveRemaining(); if (e.key === "Escape") setEditRemaining(false); }}
-              className="w-28 border bg-background px-2 py-1 text-xs" />
-            <button onClick={saveRemaining} className="text-positive"><Check className="size-3.5" /></button>
-          </div>
-        ) : (
-          <button onClick={() => setEditRemaining(true)} className="hover:text-primary hover:underline">
-            {brl(forecast)}
-          </button>
-        )}
-      </td>
-      {/* Orçamento — editable */}
-      <td className="num p-3">
-        {editPlanned ? (
-          <div className="flex items-center gap-1">
-            <input type="number" autoFocus value={plannedVal} onChange={(e) => setPlannedVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") savePlanned(); if (e.key === "Escape") setEditPlanned(false); }}
-              className="w-28 border bg-background px-2 py-1 text-xs" />
-            <button onClick={savePlanned} className="text-positive"><Check className="size-3.5" /></button>
-          </div>
-        ) : (
-          <button onClick={() => setEditPlanned(true)} className="hover:text-primary hover:underline">
-            {brl(parseFloat(plannedVal) || b.planned)}
-          </button>
-        )}
-      </td>
-      {/* Comprometido — computed */}
+      <td className="num p-3">{brl(forecast)}</td>
+      <td className="num p-3">{brl(b.planned)}</td>
       <td className="num p-3">{brl(committed)}</td>
-      {/* Realizado — computed */}
       <td className="num p-3">{brl(realized)}</td>
-      {/* Saldo = Projeção − Realizado */}
       <td className={cn("num p-3", saldo < 0 ? "text-destructive" : saldo > 0 ? "text-positive" : "")}>{brl(saldo)}</td>
     </tr>
   );
@@ -463,28 +401,20 @@ function Detail() {
 
       {editing && <EditForm project={project} onClose={() => setEditing(false)} />}
 
-      {/* KPI cards — forecast from budget sum */}
+      {/* KPI cards */}
       <section className="mt-6 grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
         {([
           ["Capital aportado", s.capital, null],
           ["Caixa disponível", s.cash, null],
-          ...(project.budget > 0 ? [["Forecast", project.budget, null] as [string, number, null]] : []),
-          ["Orçamento", totals.planned, null],
+          ...(project.budget > 0 ? [["Cost Forecast", project.budget, null] as [string, number, null]] : []),
+          ...(project.vgv != null && project.vgv > 0 ? [["VGV", project.vgv, null] as [string, number, null]] : []),
           ["Realizado", totals.realized, null],
-          ["Projeção", totals.forecast, null],
-          ["Saldo", totals.forecast - totals.realized, totals.forecast - totals.realized],
         ] as [string, number, number | null][]).map(([l, v, colorVal]) => (
           <div key={l} className="bg-card p-5">
             <p className="text-xs text-muted-foreground">{l}</p>
             <p className={cn("num mt-2 font-display text-2xl", colorVal !== null ? (colorVal >= 0 ? "text-positive" : "text-destructive") : "text-primary")}>{brl(v)}</p>
           </div>
         ))}
-        {project.vgv != null && project.vgv > 0 && (
-          <div className="bg-card p-5">
-            <p className="text-xs text-muted-foreground">VGV</p>
-            <p className="num mt-2 font-display text-2xl text-primary">{brl(project.vgv)}</p>
-          </div>
-        )}
         {project.forecast && (
           <div className="bg-card p-5">
             <p className="text-xs text-muted-foreground">Previsão</p>
@@ -574,7 +504,7 @@ function Detail() {
                   <p className="text-sm text-muted-foreground">Nenhuma linha orçamentária.</p>
                 ) : (
                   <>
-                    <p className="mb-3 text-xs text-muted-foreground">Clique em Orçamento ou Forecast para editar. Realizado e Comprometido são calculados do financeiro.</p>
+                    <p className="mb-3 text-xs text-muted-foreground">Realizado e Comprometido são calculados do financeiro.</p>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[650px] text-sm">
                         <thead>

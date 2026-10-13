@@ -1,14 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useRef, useEffect } from "react";
-import { FileText, Plus, Trash2, X, Search } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  FileText, Plus, Trash2, X, Search, Filter,
+  Zap, Droplet, Hammer, Wrench, FileCheck, Home, TrendingUp,
+  RefreshCw, ShieldCheck, Package, Percent, Layers, Landmark,
+} from "lucide-react";
+
+const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Capital":                 TrendingUp,
+  "Alvenaria":               Layers,
+  "Aprovação":               FileCheck,
+  "Aquisição do imóvel":     Home,
+  "Custo recorrente":        RefreshCw,
+  "Elétrica":                Zap,
+  "Fundação":                Landmark,
+  "Hidráulica":              Droplet,
+  "Mão de obra":             Hammer,
+  "Máquinas e equipamentos": Wrench,
+  "Projetos":                FileText,
+  "Segurança":               ShieldCheck,
+  "Outros":                  Package,
+  "Comissão":                Percent,
+};
 import { toast } from "sonner";
-import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
+import { useAdmin } from "@/components/admin/AdminLayout";
 import { useCreateMovement, usePatchMovement, useDeleteMovement } from "@/lib/hooks/useAdminData";
 import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose,
 } from "@/components/ui/drawer";
 import { Switch } from "@/components/ui/switch";
-import { brl, dateBR } from "@/lib/format";
+import { brl, dateBR, maskBRL, parseBRL } from "@/lib/format";
 import { quoteTotal } from "@/lib/data/admin-calculations";
 import { cn } from "@/lib/utils";
 import type { Movement } from "@/lib/data/admin-types";
@@ -26,110 +48,113 @@ export const Route = createFileRoute("/_authenticated/admin/financeiro")({
   component: Financeiro,
 });
 
-const OBRA_TYPES = ["MO", "Material"];
-const OBRA_CATEGORIES = ["Capital", "Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Outros"];
+// Fallbacks used only before /data loads; replaced by data.obraCategories / data.obraTypes
+const OBRA_TYPES_FB = ["MO", "Material"];
+const OBRA_CATEGORIES_FB = ["Capital", "Alvenaria", "Aprovação", "Aquisição do imóvel", "Custo recorrente", "Elétrica", "Fundação", "Hidráulica", "Mão de obra", "Máquinas e equipamentos", "Projetos", "Segurança", "Outros"];
 
 function originLabel(description: string): string {
   return description.includes(" — ") ? description.split(" — ")[0]! : description;
 }
 
-// ─── Recipient autocomplete ───────────────────────────────────────────────────
+// ─── Supplier select ──────────────────────────────────────────────────────────
 
-interface Recipient { name: string; cnpj: string }
-
-function useRecipients(): Recipient[] {
-  const { data } = useAdmin();
-  return useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const m of data.movements) {
-      const name = m.recipientName?.trim() ?? "";
-      const cnpj = m.cnpj?.trim() ?? "";
-      if (name && !seen.has(name)) seen.set(name, cnpj);
-    }
-    return Array.from(seen.entries()).map(([name, cnpj]) => ({ name, cnpj }));
-  }, [data.movements]);
-}
-
-function RecipientFields({
-  name,
-  cnpj,
-  onName,
-  onCnpj,
-  recipients,
+function SupplierSelect({
+  value,
+  onChange,
+  suppliers,
+  label,
 }: {
-  name: string;
-  cnpj: string;
-  onName: (v: string) => void;
-  onCnpj: (v: string) => void;
-  recipients: Recipient[];
+  value: string;
+  onChange: (id: string) => void;
+  suppliers: { id: string; name: string; cnpj?: string }[];
+  label?: string;
 }) {
-  const [nameSuggestions, setNameSuggestions] = useState<Recipient[]>([]);
-  const [cnpjSuggestions, setCnpjSuggestions] = useState<Recipient[]>([]);
-  const nameRef = useRef<HTMLDivElement>(null);
-  const cnpjRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selected = suppliers.find((s) => s.id === value);
 
-  useEffect(() => {
-    function close(e: MouseEvent) {
-      if (nameRef.current && !nameRef.current.contains(e.target as Node)) setNameSuggestions([]);
-      if (cnpjRef.current && !cnpjRef.current.contains(e.target as Node)) setCnpjSuggestions([]);
-    }
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
+  const filtered = query
+    ? suppliers.filter(
+        (s) =>
+          s.name.toLowerCase().includes(query.toLowerCase()) ||
+          (s.cnpj ?? "").includes(query),
+      )
+    : suppliers;
 
-  function onNameChange(v: string) {
-    onName(v);
-    const q = v.trim().toLowerCase();
-    setNameSuggestions(q.length < 1 ? [] : recipients.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 10));
+  function openDrop() {
+    const r = inputRef.current?.getBoundingClientRect();
+    if (r) setDropPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    setQuery("");
+    setOpen(true);
   }
-  function onCnpjChange(v: string) {
-    onCnpj(v);
-    const q = v.trim().toLowerCase();
-    setCnpjSuggestions(q.length < 1 ? [] : recipients.filter((r) => r.cnpj.toLowerCase().includes(q)).slice(0, 10));
+
+  function pick(id: string) {
+    onChange(id);
+    setQuery("");
+    setOpen(false);
   }
-  function pickName(r: Recipient) { onName(r.name); onCnpj(r.cnpj); setNameSuggestions([]); }
-  function pickCnpj(r: Recipient) { onCnpj(r.cnpj); onName(r.name); setCnpjSuggestions([]); }
 
   return (
-    <>
-      <div className="relative" ref={cnpjRef}>
-        <label className="block text-xs text-muted-foreground">CNPJ / CPF</label>
-        <input value={cnpj} onChange={(e) => onCnpjChange(e.target.value)} maxLength={18}
-          placeholder="00.000.000/0000-00"
-          className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
-        {cnpjSuggestions.length > 0 && (
-          <ul className="absolute left-0 top-full z-50 w-full border bg-card shadow-md text-sm">
-            {cnpjSuggestions.map((r, i) => (
-              <li key={i}>
-                <button type="button" onMouseDown={() => pickCnpj(r)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted">
-                  <span className="truncate font-mono">{r.cnpj}</span>
-                  {r.name && <span className="shrink-0 truncate text-xs text-muted-foreground max-w-[120px]">{r.name}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
+    <div>
+      <label className="block text-xs text-muted-foreground">{label ?? "Fornecedor / Cliente"}</label>
+      <div className="relative mt-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : (selected?.name ?? "")}
+          onChange={(e) => { setQuery(e.target.value); if (!open) openDrop(); }}
+          onFocus={openDrop}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Buscar fornecedor..."
+          className="w-full border bg-background px-3 py-2 text-sm"
+        />
+        {value && (
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); pick(""); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
         )}
       </div>
-      <div className="relative" ref={nameRef}>
-        <label className="block text-xs text-muted-foreground">Nome / Razão social</label>
-        <input value={name} onChange={(e) => onNameChange(e.target.value)} maxLength={200}
-          className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
-        {nameSuggestions.length > 0 && (
-          <ul className="absolute left-0 top-full z-50 w-full border bg-card shadow-md text-sm">
-            {nameSuggestions.map((r, i) => (
-              <li key={i}>
-                <button type="button" onMouseDown={() => pickName(r)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted">
-                  <span className="truncate">{r.name}</span>
-                  {r.cnpj && <span className="shrink-0 font-mono text-xs text-muted-foreground">{r.cnpj}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </>
+      {open && createPortal(
+        <div
+          style={{ position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+          className="max-h-48 overflow-y-auto border bg-card shadow-lg"
+        >
+          <button
+            type="button"
+            onMouseDown={() => pick("")}
+            className="flex w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent/20"
+          >
+            — Nenhum —
+          </button>
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={() => pick(s.id)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent/20",
+                value === s.id && "bg-primary/10 text-primary",
+              )}
+            >
+              <span className="flex-1 truncate">{s.name}</span>
+              {s.id.startsWith("lead:")
+                ? <span className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">cliente</span>
+                : s.cnpj ? <span className="shrink-0 text-xs text-muted-foreground">{s.cnpj}</span> : null}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum resultado.</p>
+          )}
+        </div>,
+        document.body,
+      )}
+    </div>
   );
 }
 
@@ -147,41 +172,49 @@ interface DrawerForm {
   development_id: string;
   obra_type: string;
   obra_category: string;
-  cnpj: string;
-  recipient_name: string;
+  supplier_id: string;
   attachment_url: string;
 }
 
 function MovementDrawer({
   movement,
   projects,
+  suppliers,
+  obraCategories,
+  obraTypes,
   onClose,
 }: {
   movement: Movement | null;
   projects: { id: string; name: string }[];
+  suppliers: { id: string; name: string; cnpj?: string }[];
+  obraCategories: string[];
+  obraTypes: string[];
   onClose: () => void;
 }) {
   const patchMovement = usePatchMovement();
   const deleteMovement = useDeleteMovement();
-  const recipients = useRecipients();
 
   const initForm: DrawerForm = {
     description: movement?.description ?? "",
     category: movement?.category ?? "Comissão",
     direction: movement?.direction ?? "Saída",
-    value: String(movement?.value ?? ""),
+    value: movement?.value ? movement.value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     date: movement?.date ?? new Date().toISOString().slice(0, 10),
     date_competencia: movement?.dateCompetencia ?? "",
     status: movement?.status ?? "Realizado",
     is_operational: movement?.isOperational ?? false,
     development_id: movement?.projectId ?? projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
-    obra_type: movement?.obraType ?? OBRA_TYPES[0]!,
-    obra_category: movement?.obraCategory ?? movement?.category ?? OBRA_CATEGORIES[0]!,
-    cnpj: movement?.cnpj ?? "",
-    recipient_name: movement?.recipientName || (movement ? originLabel(movement.description) : ""),
+    obra_type: movement?.obraType ?? obraTypes[0] ?? "",
+    obra_category: movement?.obraCategory ?? movement?.category ?? obraCategories[0] ?? "",
+    supplier_id: movement?.supplierId
+      ?? (movement?.recipientName
+        ? (suppliers.find((s) => s.name === movement.recipientName)?.id ?? "")
+        : ""),
     attachment_url: movement?.attachments?.[0] ?? "",
   };
   const [form, setForm] = useState<DrawerForm>(initForm);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   function setStr(k: keyof { [P in keyof DrawerForm as DrawerForm[P] extends string ? P : never]: string }, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -206,15 +239,15 @@ function MovementDrawer({
       development_id?: string;
       obra_type?: string;
       obra_category?: string;
-      cnpj?: string;
-      recipient_name?: string;
+      supplier_id?: string | null;
+      recipient_name?: string | null;
       attachment_url?: string | null;
     };
     const upd: PatchPayload = { id: movement!.id };
     if (form.description !== movement!.description) upd.description = form.description;
     if (form.direction !== movement!.direction) upd.direction = form.direction;
-    const v = parseFloat(form.value);
-    if (!isNaN(v) && v !== movement!.value) upd.value = v;
+    const v = parseBRL(form.value);
+    if (v !== movement!.value) upd.value = v;
     if (form.date !== movement!.date) upd.date = form.date;
     if (form.date_competencia !== (movement!.dateCompetencia ?? "")) upd.date_competencia = form.date_competencia || null;
     if (form.status !== movement!.status) upd.status = form.status;
@@ -227,8 +260,13 @@ function MovementDrawer({
       if (form.obra_category !== movement!.category) upd.category = form.obra_category;
       if (form.obra_category !== (movement!.obraCategory ?? "")) upd.obra_category = form.obra_category;
     }
-    if (form.cnpj !== (movement!.cnpj ?? "")) upd.cnpj = form.cnpj;
-    if (form.recipient_name !== (movement!.recipientName ?? "")) upd.recipient_name = form.recipient_name;
+    if (form.supplier_id.startsWith("lead:")) {
+      const contact = suppliers.find((s) => s.id === form.supplier_id);
+      upd.supplier_id = null;
+      upd.recipient_name = contact?.name ?? null;
+    } else if (form.supplier_id !== (movement!.supplierId ?? "")) {
+      upd.supplier_id = form.supplier_id || null;
+    }
     if (form.attachment_url !== (movement!.attachments?.[0] ?? "")) upd.attachment_url = form.attachment_url || null;
     if (Object.keys(upd).length === 1) { toast("Sem alterações."); return; }
     patchMovement.mutate(upd, {
@@ -238,7 +276,6 @@ function MovementDrawer({
   }
 
   function handleDelete() {
-    if (!confirm("Excluir este lançamento?")) return;
     deleteMovement.mutate(movement!.id, {
       onSuccess: () => { toast.success("Lançamento excluído."); onClose(); },
       onError: () => toast.error("Erro ao excluir."),
@@ -296,14 +333,14 @@ function MovementDrawer({
                   <label className="block text-xs text-muted-foreground">Tipo</label>
                   <select value={form.obra_type} onChange={(e) => setStr("obra_type", e.target.value)}
                     className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                    {OBRA_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    {obraTypes.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs text-muted-foreground">Categoria</label>
                   <select value={form.obra_category} onChange={(e) => setStr("obra_category", e.target.value)}
                     className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                    {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                    {obraCategories.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -321,11 +358,17 @@ function MovementDrawer({
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground">Tipo</label>
-                <select value={form.direction} onChange={(e) => setStr("direction", e.target.value)}
-                  className="mt-1 w-full border bg-background px-3 py-2 text-sm">
-                  <option value="Entrada">Entrada</option>
-                  <option value="Saída">Saída</option>
-                </select>
+                <div className="mt-1 flex overflow-hidden border">
+                  {(["Entrada", "Saída"] as const).map((d) => (
+                    <button key={d} type="button" onClick={() => setStr("direction", d)}
+                      className={cn(
+                        "flex-1 py-2 text-sm transition-colors",
+                        form.direction === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                      )}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
               </div>
               {form.is_operational && (
                 <div>
@@ -338,7 +381,8 @@ function MovementDrawer({
               )}
               <div>
                 <label className="block text-xs text-muted-foreground">Valor (R$)</label>
-                <input type="number" min="0.01" step="0.01" value={form.value} onChange={(e) => setStr("value", e.target.value)}
+                <input type="text" inputMode="numeric" value={form.value} onChange={(e) => setStr("value", maskBRL(e.target.value))}
+                  placeholder="0,00"
                   className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
               </div>
               <div>
@@ -364,18 +408,14 @@ function MovementDrawer({
             </div>
           </section>
 
-          {/* Recipient */}
+          {/* Supplier */}
           <section>
-            <h3 className="mb-3 text-sm font-semibold text-primary">Destinatário / Originador</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <RecipientFields
-                name={form.recipient_name}
-                cnpj={form.cnpj}
-                onName={(v) => setStr("recipient_name", v)}
-                onCnpj={(v) => setStr("cnpj", v)}
-                recipients={recipients}
-              />
-            </div>
+            <h3 className="mb-3 text-sm font-semibold text-primary">Fornecedor / Cliente</h3>
+            <SupplierSelect
+              value={form.supplier_id}
+              onChange={(v) => setStr("supplier_id", v)}
+              suppliers={suppliers}
+            />
           </section>
 
           {/* Attachment */}
@@ -424,18 +464,37 @@ function MovementDrawer({
             </section>
           )}
 
-          {/* Actions */}
-          <section className="flex flex-wrap gap-3 border-t pt-4">
-            <button onClick={save} disabled={patchMovement.isPending}
-              className="bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-              {patchMovement.isPending ? "Salvando…" : "Salvar alterações"}
-            </button>
-            <button onClick={handleDelete}
-              className="flex items-center gap-2 border border-destructive/30 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/5">
-              <Trash2 className="size-4" /> Excluir
-            </button>
-          </section>
         </div>
+        </div>
+
+        <div className="shrink-0 border-t bg-background px-5 py-3">
+          {showDeleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <input autoFocus value={deleteInput} onChange={(e) => setDeleteInput(e.target.value)}
+                placeholder="Digite EXCLUIR" className="flex-1 border bg-background px-3 py-2 text-sm" />
+              <button onClick={handleDelete} disabled={deleteInput !== "EXCLUIR" || deleteMovement.isPending}
+                className="bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-40">
+                Confirmar
+              </button>
+              <button onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                className="px-3 py-2 text-sm text-muted-foreground">×</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowDeleteConfirm(true)}
+                className="flex shrink-0 items-center gap-2 text-sm text-destructive">
+                <Trash2 className="size-4" /> Excluir
+              </button>
+              <button onClick={save} disabled={patchMovement.isPending}
+                className={cn(
+                  "relative flex flex-1 items-center justify-center overflow-hidden py-2.5 text-sm font-semibold text-primary-foreground",
+                  "bg-primary disabled:opacity-60",
+                  "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+                )}>
+                <span className="relative z-10">{patchMovement.isPending ? "Salvando…" : "Salvar"}</span>
+              </button>
+            </div>
+          )}
         </div>
       </DrawerContent>
     </Drawer>
@@ -457,16 +516,17 @@ function MovementCard({
 }) {
   const isEntrada = m.direction === "Entrada";
   const displayDate = dateField === "dateCompetencia" ? (m.dateCompetencia ?? m.date) : m.date;
+  const CatIcon = CATEGORY_ICON[m.category] ?? Package;
   return (
     <button
       onClick={onClick}
       className="flex w-full items-center gap-4 border bg-card px-4 py-4 text-left transition-colors hover:bg-accent/20"
     >
       <div className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
         isEntrada ? "bg-positive/15 text-positive" : "bg-destructive/15 text-destructive",
       )}>
-        {isEntrada ? "+" : "−"}
+        <CatIcon className="size-4" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{m.description}</p>
@@ -521,13 +581,18 @@ function MovementCard({
 
 function NewMovementDialog({
   projects,
+  suppliers,
+  obraCategories,
+  obraTypes,
   onClose,
 }: {
   projects: { id: string; name: string }[];
+  suppliers: { id: string; name: string; cnpj?: string }[];
+  obraCategories: string[];
+  obraTypes: string[];
   onClose: () => void;
 }) {
   const createMovement = useCreateMovement();
-  const recipients = useRecipients();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     development_id: projects.find((p) => p.id !== "fundo-md70")?.id ?? "",
@@ -539,17 +604,16 @@ function NewMovementDialog({
     date_competencia: "",
     status: "Realizado" as "Previsto" | "Comprometido" | "Realizado",
     is_operational: false,
-    obra_type: OBRA_TYPES[0],
-    obra_category: OBRA_CATEGORIES[0],
-    cnpj: "",
-    recipient_name: "",
+    obra_type: obraTypes[0] ?? "",
+    obra_category: obraCategories[0] ?? "",
+    supplier_id: "",
   });
   function set(k: string, v: string | boolean) { setForm((f) => ({ ...f, [k]: v })); }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const value = parseFloat(form.value);
-    if (!form.description.trim() || isNaN(value) || value <= 0) { toast.error("Preencha todos os campos obrigatórios."); return; }
+    const value = parseBRL(form.value);
+    if (!form.description.trim() || value <= 0) { toast.error("Preencha todos os campos obrigatórios."); return; }
     try {
       await createMovement.mutateAsync({
         development_id: form.is_operational ? "fundo-md70" : form.development_id,
@@ -562,8 +626,9 @@ function NewMovementDialog({
         is_operational: form.is_operational,
         ...(form.date_competencia ? { date_competencia: form.date_competencia } : {}),
         ...(!form.is_operational ? { obra_type: form.obra_type, obra_category: form.obra_category } : {}),
-        ...(form.cnpj ? { cnpj: form.cnpj } : {}),
-        ...(form.recipient_name ? { recipient_name: form.recipient_name } : {}),
+        ...(form.supplier_id.startsWith("lead:")
+          ? { recipient_name: suppliers.find((s) => s.id === form.supplier_id)?.name }
+          : form.supplier_id ? { supplier_id: form.supplier_id } : {}),
       });
       toast.success("Lançamento criado.");
       onClose();
@@ -601,14 +666,14 @@ function NewMovementDialog({
                 <label className="block text-sm font-medium">Tipo obra</label>
                 <select value={form.obra_type} onChange={(e) => set("obra_type", e.target.value)}
                   className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-                  {OBRA_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  {obraTypes.map((t) => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium">Categoria</label>
                 <select value={form.obra_category} onChange={(e) => set("obra_category", e.target.value)}
                   className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-                  {OBRA_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                  {obraCategories.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </>
@@ -620,11 +685,17 @@ function NewMovementDialog({
           </div>
           <div>
             <label className="block text-sm font-medium">Tipo</label>
-            <select value={form.direction} onChange={(e) => set("direction", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-              <option value="Entrada">Entrada</option>
-              <option value="Saída">Saída</option>
-            </select>
+            <div className="mt-1.5 flex overflow-hidden border">
+              {(["Entrada", "Saída"] as const).map((d) => (
+                <button key={d} type="button" onClick={() => set("direction", d)}
+                  className={cn(
+                    "flex-1 py-2 text-sm transition-colors",
+                    form.direction === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                  )}>
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
           {form.is_operational && (
             <div>
@@ -637,7 +708,8 @@ function NewMovementDialog({
           )}
           <div>
             <label className="block text-sm font-medium">Valor (R$) *</label>
-            <input required type="number" min="0.01" step="0.01" value={form.value} onChange={(e) => set("value", e.target.value)}
+            <input type="text" inputMode="numeric" value={form.value} onChange={(e) => set("value", maskBRL(e.target.value))}
+              placeholder="0,00"
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
           </div>
           <div>
@@ -659,13 +731,13 @@ function NewMovementDialog({
             <input type="date" value={form.date_competencia} onChange={(e) => set("date_competencia", e.target.value)}
               className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
           </div>
-          <RecipientFields
-            name={form.recipient_name}
-            cnpj={form.cnpj}
-            onName={(v) => set("recipient_name", v)}
-            onCnpj={(v) => set("cnpj", v)}
-            recipients={recipients}
-          />
+          <div className="sm:col-span-2">
+            <SupplierSelect
+              value={form.supplier_id}
+              onChange={(v) => set("supplier_id", v)}
+              suppliers={suppliers}
+            />
+          </div>
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="border px-5 py-2.5 text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
@@ -695,60 +767,89 @@ function ScopeFilters({
   search: string;
   onSearch: (v: string) => void;
 }) {
-  const SCOPES: { key: Scope; label: string }[] = [
-    { key: "all", label: "Todos" },
-    { key: "operational", label: "Operacional" },
-    { key: "empreendimentos", label: "Empreendimentos" },
-  ];
+  const [filterOpen, setFilterOpen] = useState(false);
   return (
-    <div className="mb-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded border text-sm">
-          {SCOPES.map(({ key, label }) => (
-            <button key={key} onClick={() => onScope(key)}
-              className={cn(
-                "px-4 py-1.5 transition-colors",
-                scope === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-              )}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="relative">
+    <div className="sticky top-[104px] z-10 -mx-4 mb-4 border-b bg-background/95 px-4 pb-3 pt-3 backdrop-blur md:-mx-8 md:px-8 space-y-3">
+      {/* Search row */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <input
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Buscar lançamento..."
-            className="border bg-background pl-8 pr-3 py-1.5 text-sm w-44 sm:w-56"
+            className="w-full border bg-background pl-8 pr-3 py-2 text-sm"
           />
         </div>
-        <button onClick={onNew} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          <Plus className="size-4" /> Novo lançamento
+        <button
+          onClick={() => setFilterOpen((v) => !v)}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center bg-primary text-primary-foreground",
+            "relative overflow-hidden",
+            "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+          )}
+        >
+          <Filter className="relative z-10 size-4" />
         </button>
       </div>
-      {(scope === "empreendimentos" || scope === "all") && (
-        <div className="flex flex-wrap gap-3 text-sm">
+
+      {/* Filter panel */}
+      {filterOpen && (
+        <div className="border bg-card p-4 space-y-3 text-sm">
+          <div>
+            <p className="mb-2 text-xs text-muted-foreground">Escopo</p>
+            <div className="flex rounded border">
+              {([
+                { key: "operational" as const, label: "Operacional" },
+                { key: "empreendimentos" as const, label: "Empreendimentos" },
+              ]).map(({ key, label }) => (
+                <button key={key} onClick={() => onScope(scope === key ? "all" : key)}
+                  className={cn(
+                    "flex-1 px-4 py-1.5 transition-colors",
+                    scope === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                  )}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {scope === "empreendimentos" && (
-            <label>
-              Empreendimento{" "}
-              <select value={projectId} onChange={(e) => onProject(e.target.value)} className="ml-2 border bg-background px-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Empreendimento</label>
+              <select value={projectId} onChange={(e) => onProject(e.target.value)}
+                className="mt-1 w-full border bg-background px-3 py-2">
                 <option value="all">Todos</option>
                 {projects.filter((p) => p.id !== "fundo-md70").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-            </label>
+            </div>
           )}
+
           {categories.length > 1 && (
-            <label>
-              Categoria{" "}
-              <select value={category} onChange={(e) => onCategory(e.target.value)} className="ml-2 border bg-background px-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Categoria</label>
+              <select value={category} onChange={(e) => onCategory(e.target.value)}
+                className="mt-1 w-full border bg-background px-3 py-2">
                 <option value="all">Todas</option>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-            </label>
+            </div>
           )}
         </div>
       )}
+
+      {/* CTA */}
+      <button
+        onClick={onNew}
+        className={cn(
+          "flex w-full items-center justify-center gap-2 bg-primary py-3 text-sm font-medium text-primary-foreground",
+          "relative overflow-hidden",
+          "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+        )}
+      >
+        <Plus className="relative z-10 size-4" />
+        <span className="relative z-10">Novo lançamento</span>
+      </button>
     </div>
   );
 }
@@ -843,20 +944,25 @@ function Financeiro() {
   const { data } = useAdmin();
   const selectedMovement = selectedId ? data.movements.find((m) => m.id === selectedId) ?? null : null;
 
+  const allContacts = useMemo(() => [
+    ...data.suppliers.map((s) => ({ id: s.id, name: s.name, cnpj: s.cnpj })),
+    ...data.leads.map((l) => ({ id: `lead:${l.id}`, name: l.name, cnpj: l.cpf })),
+  ], [data.suppliers, data.leads]);
+
   return (
     <div className="lg:w-1/2 lg:mx-auto">
-      <AdminHeading title="Lançamentos">Histórico de lançamentos por empreendimento.</AdminHeading>
-
-      <div className="mb-6 flex gap-1 border-b">
-        {(["caixa", "competencia"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={cn(
-              "border-b-2 -mb-px px-4 py-2 text-sm font-medium transition-colors",
-              tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
-            )}>
-            {t === "caixa" ? "Caixa" : "Competência"}
-          </button>
-        ))}
+      <div className="sticky top-16 z-[15] -mx-4 mb-6 border-b bg-background/95 backdrop-blur md:-mx-8">
+        <div className="flex px-4 md:px-8">
+          {(["caixa", "competencia"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={cn(
+                "flex-1 border-b-2 -mb-px py-2.5 text-sm font-medium transition-colors",
+                tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}>
+              {t === "caixa" ? "Caixa" : "Competência"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "caixa"
@@ -867,10 +973,19 @@ function Financeiro() {
         key={selectedId ?? "none"}
         movement={selectedMovement}
         projects={data.projects}
+        suppliers={allContacts}
+        obraCategories={data.obraCategories ?? OBRA_CATEGORIES_FB}
+        obraTypes={data.obraTypes ?? OBRA_TYPES_FB}
         onClose={() => setSelectedId(null)}
       />
 
-      {showNew && <NewMovementDialog projects={data.projects} onClose={() => setShowNew(false)} />}
+      {showNew && <NewMovementDialog
+        projects={data.projects}
+        suppliers={allContacts}
+        obraCategories={data.obraCategories ?? OBRA_CATEGORIES_FB}
+        obraTypes={data.obraTypes ?? OBRA_TYPES_FB}
+        onClose={() => setShowNew(false)}
+      />}
     </div>
   );
 }

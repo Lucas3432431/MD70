@@ -3,11 +3,14 @@ import { useState, useMemo } from "react";
 import { Plus, X, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
+import { useAdmin } from "@/components/admin/AdminLayout";
 import { useCreateProject } from "@/lib/hooks/useAdminData";
 import { projectSummary, budgetStatus } from "@/lib/data/admin-calculations";
-import { brlShort } from "@/lib/format";
+import { brlShort, maskBRL, parseBRL } from "@/lib/format";
 import type { ProjectStage } from "@/lib/data/admin-types";
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose,
+} from "@/components/ui/drawer";
 
 export const Route = createFileRoute("/_authenticated/admin/empreendimentos/")({
   head: () => ({ meta: [
@@ -74,9 +77,9 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
         city: form.city || "",
         status: form.status,
         ...(form.category ? { category: form.category } : {}),
-        capital: parseFloat(form.capital) || 0,
-        budget: parseFloat(form.budget) || 0,
-        remaining: parseFloat(form.budget) || 0,
+        capital: parseBRL(form.capital),
+        budget: parseBRL(form.budget),
+        remaining: parseBRL(form.budget),
         ...(form.forecast ? { forecast: form.forecast } : {}),
         ...(form.image_url ? { image_url: form.image_url } : {}),
         ...(form.summary ? { summary: form.summary } : {}),
@@ -89,75 +92,82 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/60 p-4" onClick={onClose}>
-      <form
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={submit}
-        className="my-8 w-full max-w-2xl border bg-card p-6 shadow-xl"
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-display text-2xl text-primary">Novo empreendimento</h2>
-          <button type="button" onClick={onClose}><X className="size-5 text-muted-foreground" /></button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Nome *</label>
-            <input required value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={200}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="Ex: Edifício Aurora" />
+    <Drawer open onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent className="flex max-h-[92vh] flex-col lg:left-[20%] lg:right-[20%]">
+        <DrawerHeader className="shrink-0 border-b pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <DrawerTitle className="font-display text-2xl text-primary">Novo empreendimento</DrawerTitle>
+            <DrawerClose asChild>
+              <button onClick={onClose}><X className="size-5 text-muted-foreground" /></button>
+            </DrawerClose>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Cidade</label>
-            <input value={form.city} onChange={(e) => set("city", e.target.value)} maxLength={100}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="São Paulo, SP" />
+        </DrawerHeader>
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto">
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium">Nome *</label>
+                <input required value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={200}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="Ex: Edifício Aurora" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Cidade</label>
+                <input value={form.city} onChange={(e) => set("city", e.target.value)} maxLength={100}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="São Paulo, SP" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Categoria</label>
+                <input value={form.category} onChange={(e) => set("category", e.target.value)} maxLength={80}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="Residencial, Comercial…" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Status (pipeline)</label>
+                <select value={form.status} onChange={(e) => set("status", e.target.value)}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
+                  {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Previsão de conclusão</label>
+                <input type="date" value={form.forecast} onChange={(e) => set("forecast", e.target.value)}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Capital total (R$)</label>
+                <input type="text" inputMode="numeric" value={form.capital} onChange={(e) => set("capital", maskBRL(e.target.value))}
+                  placeholder="0,00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Forecast (R$)</label>
+                <input type="text" inputMode="numeric" value={form.budget} onChange={(e) => set("budget", maskBRL(e.target.value))}
+                  placeholder="0,00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+                <p className="mt-1 text-xs text-muted-foreground">Estimativa inicial no começo da obra.</p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium">URL da imagem</label>
+                <input type="url" value={form.image_url} onChange={(e) => set("image_url", e.target.value)}
+                  className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="https://…" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium">Descrição / resumo</label>
+                <textarea value={form.summary} onChange={(e) => set("summary", e.target.value)} maxLength={600} rows={3}
+                  className="mt-1.5 w-full border bg-background p-2 text-sm" />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Categoria</label>
-            <input value={form.category} onChange={(e) => set("category", e.target.value)} maxLength={80}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="Residencial, Comercial…" />
+          <div className="shrink-0 border-t bg-background px-5 py-3">
+            <button type="submit" disabled={createProject.isPending}
+              className={cn(
+                "relative flex w-full items-center justify-center overflow-hidden py-2.5 text-sm font-semibold text-primary-foreground",
+                "bg-primary disabled:opacity-60",
+                "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+              )}>
+              <span className="relative z-10">{createProject.isPending ? "Criando…" : "Criar empreendimento"}</span>
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Status (pipeline)</label>
-            <select value={form.status} onChange={(e) => set("status", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm">
-              {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Previsão de conclusão</label>
-            <input type="date" value={form.forecast} onChange={(e) => set("forecast", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Capital total (R$)</label>
-            <input type="number" min="0" step="1000" value={form.capital} onChange={(e) => set("capital", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="0" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Forecast (R$)</label>
-            <input type="number" min="0" step="1000" value={form.budget} onChange={(e) => set("budget", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="0" />
-            <p className="mt-1 text-xs text-muted-foreground">Estimativa inicial no começo da obra.</p>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">URL da imagem</label>
-            <input type="url" value={form.image_url} onChange={(e) => set("image_url", e.target.value)}
-              className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" placeholder="https://…" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Descrição / resumo</label>
-            <textarea value={form.summary} onChange={(e) => set("summary", e.target.value)} maxLength={600} rows={3}
-              className="mt-1.5 w-full border bg-background p-2 text-sm" />
-          </div>
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="border px-5 py-2.5 text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
-          <button type="submit" disabled={createProject.isPending}
-            className="bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {createProject.isPending ? "Criando…" : "Criar empreendimento"}
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -216,24 +226,29 @@ function AdminProjects() {
 
   return (
     <>
-      <AdminHeading title="Empreendimentos">Pipeline de projetos — do primeiro contato à venda.</AdminHeading>
-
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar empreendimento..."
-            className="border bg-background pl-8 pr-3 py-2 text-sm w-52 sm:w-64"
-          />
+      <div className="sticky top-16 z-10 -mx-4 mb-5 border-b bg-background/95 px-4 pb-3 pt-3 backdrop-blur md:-mx-8 md:px-8">
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar empreendimento..."
+              className="w-full border bg-background pl-8 pr-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            onClick={() => setShowNew(true)}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 bg-primary py-3 text-sm font-semibold text-primary-foreground",
+              "relative overflow-hidden",
+              "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+            )}
+          >
+            <Plus className="relative z-10 size-4" />
+            <span className="relative z-10">Novo empreendimento</span>
+          </button>
         </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="size-4" /> Novo empreendimento
-        </button>
       </div>
 
       {/* Mobile: collapsible stacked cards */}

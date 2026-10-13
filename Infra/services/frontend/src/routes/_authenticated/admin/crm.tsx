@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Trash2, X, ChevronDown, Search } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
-import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
+import { useAdmin } from "@/components/admin/AdminLayout";
 import { usePatchLead, useCreateLead, useDeleteLead } from "@/lib/hooks/useAdminData";
-import { brl } from "@/lib/format";
+import { brl, maskCpf, maskPhone, calcCdiFactor } from "@/lib/format";
 import { sum } from "@/lib/data/admin-calculations";
 import { cn } from "@/lib/utils";
 import {
@@ -36,12 +36,12 @@ const STAGE_COLOR: Record<LeadStatus, string> = {
 function LeadDrawer({
   lead,
   projects,
-  investedByName,
+  cdiByName,
   onClose,
 }: {
   lead: Lead | null;
   projects: { id: string; name: string }[];
-  investedByName: Map<string, number>;
+  cdiByName: Map<string, { invested: number; cdiValue: number }>;
   onClose: () => void;
 }) {
   const patchLead = usePatchLead();
@@ -50,6 +50,7 @@ function LeadDrawer({
   const [name, setName] = useState(lead?.name ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
+  const [cpf, setCpf] = useState(lead?.cpf ?? "");
   const [source, setSource] = useState(lead?.source ?? SOURCES[0]);
   const [status, setStatus] = useState<LeadStatus>(lead?.status ?? "Interesse");
   const [notes, setNotes] = useState(lead?.notes ?? "");
@@ -57,6 +58,8 @@ function LeadDrawer({
   const [interests, setInterests] = useState<{ projectId: string; value: string }[]>(
     () => (lead?.projectInterests ?? (lead?.projectInterest ? [{ projectId: lead.projectInterest, value: String(lead.value ?? "") }] : [])).map((pi) => ({ projectId: (pi as { projectId: string }).projectId, value: String((pi as { value?: number }).value ?? "") }))
   );
+  const [deleteInput, setDeleteInput] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   if (!lead) return null;
   const currentLead = lead;
@@ -88,6 +91,7 @@ function LeadDrawer({
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
+        cpf: cpf.trim() || undefined,
         source,
         project_interests: serialisedInterests,
         project_interest: serialisedInterests[0]?.projectId,
@@ -101,7 +105,6 @@ function LeadDrawer({
   }
 
   function handleDelete() {
-    if (!confirm(`Excluir o lead "${currentLead.name}"?`)) return;
     deleteLead.mutate(currentLead.id, {
       onSuccess: () => { toast.success("Lead excluído."); onClose(); },
       onError: () => toast.error("Erro ao excluir."),
@@ -110,7 +113,10 @@ function LeadDrawer({
 
   const isActiveInvestor = lead.status === "Investidor ativo";
   const totalPotential = interests.reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
-  const investedValue = investedByName.get(lead.name) ?? 0;
+  const cdiData = cdiByName.get(lead.name);
+  const investedValue = cdiData?.invested ?? 0;
+  const cdiValue = cdiData?.cdiValue ?? 0;
+  const cdiGain = cdiValue - investedValue;
 
   return (
     <Drawer open onOpenChange={(v) => !v && onClose()}>
@@ -122,7 +128,7 @@ function LeadDrawer({
               <button onClick={onClose}><X className="size-5 text-muted-foreground" /></button>
             </DrawerClose>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}{lead.cpf ? ` · CPF ${lead.cpf}` : ""}</p>
         </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto">
@@ -143,7 +149,12 @@ function LeadDrawer({
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground">Telefone</label>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)}
+                <input value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))}
+                  className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground">CPF</label>
+                <input value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} placeholder="000.000.000-00"
                   className="mt-1 w-full border bg-background px-3 py-2 text-sm" />
               </div>
               <div>
@@ -160,15 +171,21 @@ function LeadDrawer({
                   {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-muted-foreground">
                   {isActiveInvestor ? "Valor investido" : "Potencial total"}
                 </label>
-                <p className={`num mt-2 text-sm font-semibold ${isActiveInvestor ? "text-positive" : "text-primary"}`}>
-                  {isActiveInvestor
-                    ? (investedValue > 0 ? brl(investedValue) : "—")
-                    : (totalPotential > 0 ? brl(totalPotential) : "—")}
-                </p>
+                {isActiveInvestor && investedValue > 0 ? (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="num text-sm font-semibold text-primary">{brl(investedValue)} <span className="text-xs font-normal text-muted-foreground">aportado</span></p>
+                    {cdiGain > 0 && <p className="num text-sm font-semibold text-positive">+{brl(cdiGain)} <span className="text-xs font-normal text-muted-foreground">rendimento CDI</span></p>}
+                    {cdiGain > 0 && <p className="num text-xs text-muted-foreground">= {brl(cdiValue)} total</p>}
+                  </div>
+                ) : (
+                  <p className="num mt-1 text-sm font-semibold text-primary">
+                    {totalPotential > 0 ? brl(totalPotential) : "—"}
+                  </p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs text-muted-foreground">Observações</label>
@@ -212,18 +229,37 @@ function LeadDrawer({
             </div>
           </section>
 
-          {/* Actions */}
-          <section className="flex flex-wrap items-center gap-3">
-            <button onClick={save} disabled={patchLead.isPending}
-              className="bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-              {patchLead.isPending ? "Salvando…" : "Salvar"}
-            </button>
-            <button onClick={handleDelete}
-              className="flex items-center gap-2 border border-destructive/30 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/5">
-              <Trash2 className="size-4" /> Excluir lead
-            </button>
-          </section>
         </div>
+        </div>
+
+        <div className="shrink-0 border-t bg-background px-5 py-3">
+          {showDeleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <input autoFocus value={deleteInput} onChange={(e) => setDeleteInput(e.target.value)}
+                placeholder="Digite EXCLUIR" className="flex-1 border bg-background px-3 py-2 text-sm" />
+              <button onClick={handleDelete} disabled={deleteInput !== "EXCLUIR" || deleteLead.isPending}
+                className="bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-40">
+                Confirmar
+              </button>
+              <button onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                className="px-3 py-2 text-sm text-muted-foreground">×</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowDeleteConfirm(true)}
+                className="flex shrink-0 items-center gap-2 text-sm text-destructive">
+                <Trash2 className="size-4" /> Excluir
+              </button>
+              <button onClick={save} disabled={patchLead.isPending}
+                className={cn(
+                  "relative flex flex-1 items-center justify-center overflow-hidden py-2.5 text-sm font-semibold text-primary-foreground",
+                  "bg-primary disabled:opacity-60",
+                  "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+                )}>
+                <span className="relative z-10">{patchLead.isPending ? "Salvando…" : "Salvar"}</span>
+              </button>
+            </div>
+          )}
         </div>
       </DrawerContent>
     </Drawer>
@@ -234,13 +270,13 @@ function LeadDrawer({
 
 function NewLeadDialog({ projects, onClose }: { projects: { id: string; name: string }[]; onClose: () => void }) {
   const createLead = useCreateLead();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", project_interest: projects.find((p) => p.id !== "fundo-md70")?.id ?? "", source: SOURCES[0], value: "", notes: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", project_interest: projects.find((p) => p.id !== "fundo-md70")?.id ?? "", source: SOURCES[0], value: "", notes: "" });
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) { toast.error("Nome obrigatório."); return; }
     try {
-      await createLead.mutateAsync({ name: form.name.trim(), ...(form.email ? { email: form.email } : {}), ...(form.phone ? { phone: form.phone } : {}), ...(form.project_interest ? { project_interest: form.project_interest } : {}), ...(form.source ? { source: form.source } : {}), ...(form.value ? { value: parseFloat(form.value) } : {}), ...(form.notes ? { notes: form.notes } : {}) });
+      await createLead.mutateAsync({ name: form.name.trim(), ...(form.email ? { email: form.email } : {}), ...(form.phone ? { phone: form.phone } : {}), ...(form.cpf ? { cpf: form.cpf } : {}), ...(form.project_interest ? { project_interest: form.project_interest } : {}), ...(form.source ? { source: form.source } : {}), ...(form.value ? { value: parseFloat(form.value) } : {}), ...(form.notes ? { notes: form.notes } : {}) });
       toast.success("Lead criado.");
       onClose();
     } catch { toast.error("Erro ao criar lead."); }
@@ -263,7 +299,11 @@ function NewLeadDialog({ projects, onClose }: { projects: { id: string; name: st
           </div>
           <div>
             <label className="block text-sm font-medium">Telefone</label>
-            <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+            <input value={form.phone} onChange={(e) => set("phone", maskPhone(e.target.value))} className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">CPF</label>
+            <input value={form.cpf} onChange={(e) => set("cpf", maskCpf(e.target.value))} placeholder="000.000.000-00" className="mt-1.5 w-full border bg-background px-3 py-2 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium">Empreendimento</label>
@@ -313,16 +353,63 @@ function CRM() {
     return q ? data.leads.filter(l => l.name.toLowerCase().includes(q) || (l.email ?? "").toLowerCase().includes(q) || (l.phone ?? "").toLowerCase().includes(q)) : data.leads;
   }, [data.leads, search]);
 
-  const investedByName = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const m of data.movements.filter((m) => m.category === "Capital" && m.status === "Realizado")) {
-      const name = m.description.includes(" — ") ? m.description.split(" — ")[0]! : null;
+  const cdiByName = useMemo(() => {
+    const ratesMap = new Map<string, number>();
+    (data.cdiRates ?? []).forEach((r) => ratesMap.set(r.yearMonth, r.rate));
+    const supplierById = new Map(data.suppliers.map((s) => [s.id, s.name]));
+
+    // Group Realizado movements by lead/supplier name
+    const movsByName = new Map<string, { date: string; direction: string; value: number }[]>();
+    for (const m of data.movements.filter((m) => m.status === "Realizado")) {
+      let name: string | null = null;
+      if (m.recipientName) name = m.recipientName;
+      else if (m.supplierId) name = supplierById.get(m.supplierId) ?? null;
+      else if (m.description.includes(" — ")) name = m.description.split(" — ")[0]!;
       if (!name) continue;
-      const delta = m.direction === "Entrada" ? m.value : -m.value;
-      map.set(name, (map.get(name) ?? 0) + delta);
+      const arr = movsByName.get(name) ?? [];
+      arr.push({ date: m.date, direction: m.direction, value: m.value });
+      movsByName.set(name, arr);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const map = new Map<string, { invested: number; cdiValue: number }>();
+    for (const [name, movs] of movsByName) {
+      movs.sort((a, b) => a.date.localeCompare(b.date));
+      let principal = 0;   // face value of active pool
+      let cdiPool = 0;     // CDI-grown value of active pool
+      let lastDate = movs[0]!.date;
+
+      for (const m of movs) {
+        // Grow existing pool from lastDate to this movement's date
+        if (cdiPool > 0 && m.date > lastDate) {
+          cdiPool *= calcCdiFactor(lastDate, m.date, ratesMap);
+        }
+        if (m.direction === "Entrada") {
+          principal += m.value;
+          cdiPool += m.value;
+        } else {
+          // Proportional withdrawal: remove the CDI-grown share
+          if (principal > 0) {
+            const ratio = Math.min(m.value / principal, 1);
+            cdiPool *= (1 - ratio);
+            principal = Math.max(principal - m.value, 0);
+          }
+        }
+        lastDate = m.date;
+      }
+
+      // Grow remaining pool to today
+      if (cdiPool > 0 && todayStr > lastDate) {
+        cdiPool *= calcCdiFactor(lastDate, todayStr, ratesMap);
+      }
+
+      map.set(name, { invested: principal, cdiValue: cdiPool });
     }
     return map;
-  }, [data.movements]);
+  }, [data.movements, data.suppliers, data.cdiRates]);
 
   function toggleStage(stage: string) {
     setOpenStages((prev) => {
@@ -335,17 +422,25 @@ function CRM() {
   function renderLeadCard(lead: ReturnType<typeof useAdmin>["data"]["leads"][number], isActive: boolean) {
     const interests = lead.projectInterests ?? (lead.projectInterest ? [{ projectId: lead.projectInterest, value: lead.value }] : []);
     const projNames = interests.map((pi) => data.projects.find((p) => p.id === pi.projectId)?.name).filter(Boolean);
-    const invested = isActive ? (investedByName.get(lead.name) ?? 0) : 0;
+    const cdiData = cdiByName.get(lead.name);
+    const invested = cdiData?.invested ?? 0;
+    const cdiValue = cdiData?.cdiValue ?? 0;
     const potentialValue = interests.reduce((s, i) => s + ((i as { value?: number }).value ?? 0), 0);
-    const displayValue = isActive ? invested : potentialValue;
     return (
       <button key={lead.id} onClick={() => setSelected(lead.id)}
         className="w-full border bg-card p-3 text-left transition-colors hover:bg-accent/20">
         <p className="truncate text-sm font-semibold text-primary">{lead.name}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{projNames.length ? projNames.join(", ") : "—"}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{projNames.length ? projNames.join(", ") : "—"}{lead.cpf ? ` · ${lead.cpf}` : ""}</p>
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="truncate rounded-sm bg-muted px-1.5 py-0.5 text-[10px]">{lead.source}</span>
-          {displayValue > 0 && <span className={cn("num shrink-0", isActive && "text-positive")}>{brl(displayValue)}</span>}
+          {invested > 0 ? (
+            <div className="text-right">
+              <span className="num block text-xs font-semibold text-positive">{brl(cdiValue)}</span>
+              {cdiValue > invested && <span className="num block text-[10px] text-muted-foreground">+{brl(cdiValue - invested)} CDI</span>}
+            </div>
+          ) : potentialValue > 0 ? (
+            <span className="num shrink-0">{brl(potentialValue)}</span>
+          ) : null}
         </div>
       </button>
     );
@@ -353,21 +448,38 @@ function CRM() {
 
   return (
     <>
-      <AdminHeading title="CRM">Leads e investidores por empreendimento e estágio do funil.</AdminHeading>
-
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar lead..."
-            className="border bg-background pl-8 pr-3 py-2 text-sm w-44 sm:w-56"
-          />
+      <div className="sticky top-16 z-10 -mx-4 mb-5 border-b bg-background/95 px-4 pb-3 pt-3 backdrop-blur md:-mx-8 md:px-8">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar lead..."
+                className="w-full border bg-background pl-8 pr-3 py-2 text-sm"
+              />
+            </div>
+            <button className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center bg-primary text-primary-foreground",
+              "relative overflow-hidden",
+              "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+            )}>
+              <Filter className="relative z-10 size-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => setShowNew(true)}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 bg-primary py-3 text-sm font-semibold text-primary-foreground",
+              "relative overflow-hidden",
+              "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+            )}
+          >
+            <Plus className="relative z-10 size-4" />
+            <span className="relative z-10">Novo lead</span>
+          </button>
         </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          <Plus className="size-4" /> Novo lead
-        </button>
       </div>
 
       {/* Mobile: collapsible stacked cards */}
@@ -429,7 +541,7 @@ function CRM() {
         key={selected ?? "none"}
         lead={selectedLead}
         projects={data.projects}
-        investedByName={investedByName}
+        cdiByName={cdiByName}
         onClose={() => setSelected(null)}
       />
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { ChevronDown, ListFilter } from "lucide-react";
-import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
+import { useAdmin } from "@/components/admin/AdminLayout";
 import { PrevistVsRealizadoChart, type Period, periodKey, periodWindowFilter } from "@/components/admin/PrevistVsRealizadoChart";
 import { brl } from "@/lib/format";
 import { sum } from "@/lib/data/admin-calculations";
@@ -222,28 +222,28 @@ function Relatorios() {
   }
 
   const PERIODS: { key: Period; label: string }[] = [
-    { key: "year", label: "Ano" },
-    { key: "month", label: "Mês" },
     { key: "week", label: "Semana" },
+    { key: "month", label: "Mês" },
+    { key: "year", label: "Ano" },
   ];
 
   return (
     <div className="lg:w-1/2 lg:mx-auto">
-      <AdminHeading title="Relatórios">Visão consolidada financeira e operacional dos empreendimentos.</AdminHeading>
-
       {/* ── Filtros globais ─────────────────────────────────────────── */}
-      <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-        <div className="flex rounded border">
+      <div className="sticky top-16 z-10 -mx-4 mb-6 border-b bg-background/95 backdrop-blur md:-mx-8">
+        <div className="flex px-4 md:px-8">
           {PERIODS.map(({ key, label }) => (
             <button key={key} onClick={() => setPeriod(key)}
               className={cn(
-                "px-4 py-1.5 transition-colors",
-                period === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                "flex-1 border-b-2 -mb-px py-2.5 text-sm font-medium transition-colors",
+                period === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
               )}>
               {label}
             </button>
           ))}
         </div>
+      </div>
+      <div className="mb-6">
         <CategoryDropdown
           categories={allCategories}
           selected={selectedCategories}

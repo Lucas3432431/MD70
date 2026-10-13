@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AdminHeading, useAdmin } from "@/components/admin/AdminLayout";
 import { PrevistVsRealizadoChart } from "@/components/admin/PrevistVsRealizadoChart";
 import { sum } from "@/lib/data/admin-calculations";
@@ -7,6 +7,8 @@ import { brl, brlShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList } from "recharts";
 import { usePatrimonioTicker } from "@/lib/hooks/usePatrimonioTicker";
+import { usePatchCdiRate } from "@/lib/hooks/useAdminData";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -254,6 +256,87 @@ function TocAnalysis({ open, onToggle }: { open: boolean; onToggle: () => void }
   );
 }
 
+// ─── CDI section ─────────────────────────────────────────────────────────────
+
+function CdiSection() {
+  const { data } = useAdmin();
+  const patchCdi = usePatchCdiRate();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState("");
+
+  const months = useMemo(() => {
+    const result: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return result;
+  }, []);
+
+  const ratesMap = useMemo(() => {
+    const m = new Map<string, number>();
+    (data.cdiRates ?? []).forEach((r) => m.set(r.yearMonth, r.rate));
+    return m;
+  }, [data.cdiRates]);
+
+  function startEdit(ym: string) {
+    setEditing(ym);
+    setInputValue(String(ratesMap.get(ym) ?? ""));
+  }
+
+  function save(ym: string) {
+    const rate = parseFloat(inputValue);
+    if (isNaN(rate) || rate < 0) { toast.error("Valor inválido."); return; }
+    patchCdi.mutate({ yearMonth: ym, rate }, {
+      onSuccess: () => { toast.success("CDI salvo."); setEditing(null); },
+      onError: () => toast.error("Erro ao salvar CDI."),
+    });
+  }
+
+  return (
+    <div className="border bg-card p-4 md:p-6">
+      <h2 className="mb-1 font-display text-xl text-primary">CDI Efetivo</h2>
+      <p className="mb-4 text-xs text-muted-foreground">Taxa mensal por competência. Clique para editar.</p>
+      <div className="space-y-px">
+        {months.filter((ym) => ratesMap.has(ym) || editing === ym).map((ym) => {
+          const rate = ratesMap.get(ym);
+          const isEdit = editing === ym;
+          const [yr, mo] = ym.split("-");
+          const label = `${mo}/${yr}`;
+          return (
+            <div key={ym} className="flex items-center gap-3 border-b py-2 last:border-0">
+              <span className="num w-14 shrink-0 text-xs text-muted-foreground">{label}</span>
+              {isEdit ? (
+                <div className="flex flex-1 items-center gap-2">
+                  <input
+                    autoFocus type="number" min="0" step="0.001" value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") save(ym); if (e.key === "Escape") setEditing(null); }}
+                    className="w-24 border bg-background px-2 py-1 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <button onClick={() => save(ym)} disabled={patchCdi.isPending}
+                    className="bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-60">
+                    OK
+                  </button>
+                  <button onClick={() => setEditing(null)} className="border px-3 py-1 text-xs text-muted-foreground hover:bg-muted">Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => startEdit(ym)} className="flex flex-1 items-center gap-1 text-left hover:opacity-70">
+                  <span className={cn("num text-sm font-semibold", rate !== undefined ? "text-positive" : "text-muted-foreground/40")}>
+                    {rate !== undefined ? `${rate.toFixed(3)}%` : "—"}
+                  </span>
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Charts section ───────────────────────────────────────────────────────────
 
 function Charts() {
@@ -353,6 +436,9 @@ function Charts() {
 
         <TocAnalysis open={analysisOpen} onToggle={() => setAnalysisOpen((v) => !v)} />
       </div>
+
+      {/* CDI */}
+      <CdiSection />
     </div>
   );
 }

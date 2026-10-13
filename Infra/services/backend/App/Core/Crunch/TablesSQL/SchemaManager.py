@@ -2017,6 +2017,7 @@ class SchemaManager:
         self._add_column_if_missing("md70_developments", "result_json", "TEXT")
         self._add_column_if_missing("md70_developments", "month_changes_json", "TEXT")
         self._add_column_if_missing("md70_developments", "month_impact", "TEXT")
+        self._add_column_if_missing("md70_developments", "vgv", "REAL DEFAULT 0")
 
         # MD70: updated_at on movements for PATCH support
         self._add_column_if_missing("md70_movements", "updated_at", "DATETIME")
@@ -2028,6 +2029,7 @@ class SchemaManager:
         self._add_column_if_missing("md70_movements", "obra_category", "TEXT")
         self._add_column_if_missing("md70_movements", "cnpj", "TEXT")
         self._add_column_if_missing("md70_movements", "recipient_name", "TEXT")
+        self._add_column_if_missing("md70_movements", "supplier_id", "TEXT REFERENCES md70_suppliers(id) ON DELETE SET NULL")
         # MD70: multiple project interests on leads
         self._add_column_if_missing("md70_leads", "project_interests_json", "TEXT")
         # MD70: financeiro-equivalent fields on purchases
