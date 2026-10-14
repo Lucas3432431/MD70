@@ -31,11 +31,20 @@ if [ -n "$DEPLOYED" ] && git cat-file -e "$DEPLOYED^{commit}" 2>/dev/null \
     exit 0
 fi
 
+# Limite para o start_prod.sh inteiro (build + up). Sem ele, um `up` preso esperando
+# um depends_on: service_healthy segura o boot para sempre e o boot_prod.sh nunca roda.
+DEPLOY_TIMEOUT="${MD70_DEPLOY_TIMEOUT:-3600}"
+
 log "Mudanças desde ${DEPLOYED:0:7} — rebuild em $(git log -1 --format='%h %s')"
-if (cd Infra/services && ./scripts/start_prod.sh); then
+(cd Infra/services && timeout -k 60 "$DEPLOY_TIMEOUT" ./scripts/start_prod.sh)
+rc=$?
+if [ "$rc" -eq 0 ]; then
     echo "$HEAD_HASH" > "$MARKER"
     log "Deploy de ${HEAD_HASH:0:7} concluído."
+elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    log "AVISO: start_prod.sh passou de ${DEPLOY_TIMEOUT}s e foi interrompido; os containers existentes serão religados."
+    exit 1
 else
-    log "AVISO: build falhou; os containers existentes serão religados."
+    log "AVISO: build falhou (rc=$rc); os containers existentes serão religados."
     exit 1
 fi

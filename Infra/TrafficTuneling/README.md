@@ -86,6 +86,16 @@ cd Infra/services && ./scripts/start_prod.sh
 
 Para trocar variáveis de ambiente, coloque um `.env.production` novo em `~/MD70/Infra/services/` antes do `start_prod.sh`. O script regenera os secrets e **apaga o `.env.production`**.
 
+O `.env.production` substitui **todos** os secrets, então ele precisa ter todas as variáveis, não só as que mudaram. Para montar um a partir dos valores atuais:
+
+```bash
+cd ~/MD70/Infra/services
+(umask 077; { cat secrets/compose.env; echo; podman unshare cat secrets/app.secrets; } > .env.production)
+# editar .env.production e rodar ./scripts/start_prod.sh
+```
+
+Se a validação falhar, os secrets antigos são mantidos e o `.env.production` não é apagado.
+
 ### Diagnóstico rápido
 
 | Resposta em `https://md70.zera.tec.br` | Significado |
@@ -119,6 +129,10 @@ O túnel também pode ser conferido no painel: Zero Trust → Networks → Tunne
   4. `boot_prod.sh`: liga o túnel e espera cada container ficar healthy, na ordem dos `depends_on` (containers que já estão rodando não são reiniciados).
 
   Se o pull ou o build falharem, o passo 4 religa os containers que já existiam, e o site volta **na versão anterior** em vez de ficar fora do ar. Procure `AVISO:` no log para saber se isso aconteceu. O log fica em `%LOCALAPPDATA%\md70-boot.log`.
+
+  O `start_prod.sh` tem um limite de 1h (`MD70_DEPLOY_TIMEOUT`, em segundos). Se passar disso, ele é interrompido e o passo 4 roda do mesmo jeito. Atenção: se a falha acontecer depois que o `podman-compose up` já recriou os containers, não há versão anterior para religar, e o site fica fora até um deploy dar certo.
+
+  Antes do build, o `start_prod.sh` confere se toda variável usada sem valor padrão no `docker-compose.yml` tem valor no `compose.env`. Se faltar alguma, ele para com `✖ Variáveis usadas no docker-compose sem valor em compose.env: ...`. Nesse caso, adicione a variável ao `.env.production` (e a `COMPOSE_VARS` no script, se ela não estiver lá).
 
   Cuidados:
   - Quando há rebuild, o site fica fora por vários minutos (o frontend sozinho pode levar até 10). Sem mudança no código, nada é reiniciado.

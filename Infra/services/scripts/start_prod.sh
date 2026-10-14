@@ -29,10 +29,37 @@ COMPOSE_VARS=(
     VITE_DOMAIN VITE_HTTP_PROTOCOL
 )
 
+# ── Vars sem valor padrão no compose precisam ter valor no compose.env ────────
+# Sem isso o compose interpola vazio (ex.: healthcheck em http://localhost:/health)
+# e o `up` fica esperando para sempre um depends_on: service_healthy.
+check_compose_vars() {
+    local env_file="$1" missing=() v
+    for v in $(grep -ohE '\$\{[A-Za-z_][A-Za-z0-9_]*(:?\?[^}]*)?\}' \
+                 "$BASE_DIR/docker-compose.yml" "$BASE_DIR/docker-compose.prod.yml" \
+               | sed -E 's/^\$\{([A-Za-z0-9_]+).*/\1/' | sort -u); do
+        grep -qE "^${v}=[\"']?[^\"'[:space:]]" "$env_file" || missing+=("$v")
+    done
+    if [ "${#missing[@]}" -gt 0 ]; then
+        echo "✖ Variáveis usadas no docker-compose sem valor em compose.env: ${missing[*]}"
+        echo "  Adicione-as ao .env.production (e a COMPOSE_VARS neste script, se faltar)."
+        return 1
+    fi
+}
+
 # ── Atualizar secrets se .env.production presente ─────────────────────────────
+# Os secrets são gerados em arquivos .new e só trocados (mv) no fim: os antigos
+# pertencem aos UIDs dos containers (chown mais abaixo) e não podem ser reescritos
+# por este usuário, mas o mv funciona porque secrets/ é dele. Se algo falhar no
+# meio, os secrets antigos ficam intactos.
 if [ -f "$ENV_PROD" ]; then
     echo "▶ Encontrado .env.production — gerando secrets..."
     mkdir -p "$SECRETS_DIR"
+    FINAL_COMPOSE_ENV="$COMPOSE_ENV"; FINAL_APP_SECRETS="$APP_SECRETS"
+    COMPOSE_ENV="$COMPOSE_ENV.new";   APP_SECRETS="$APP_SECRETS.new"
+    FRONTEND_SECRETS_NEW="$SECRETS_DIR/frontend.secrets.new"
+    REDIS_CONF_NEW="$REDIS_CONF.new"
+    trap "rm -f '$COMPOSE_ENV' '$APP_SECRETS' '$FRONTEND_SECRETS_NEW' '$REDIS_CONF_NEW'" EXIT
+    OLD_UMASK="$(umask)"; umask 077
     > "$COMPOSE_ENV"
     > "$APP_SECRETS"
     REDIS_PASSWORD=""
@@ -57,7 +84,6 @@ if [ -f "$ENV_PROD" ]; then
     done < "$ENV_PROD"
 
     chmod 600 "$APP_SECRETS" "$COMPOSE_ENV"
-    echo "✔ secrets/compose.env e secrets/app.secrets atualizados"
 
     # frontend.secrets — apenas vars que o frontend precisa
     FRONTEND_SECRET_VARS=(
@@ -65,15 +91,14 @@ if [ -f "$ENV_PROD" ]; then
         HOT_RELOAD LOG_SILENCE EXTERNAL_LOGGING SECURITY_FILTER
         STRIPE_PUBLISHABLE_KEY GOOGLE_AUTH_CLIENT_ID
     )
-    > "$SECRETS_DIR/frontend.secrets"
+    > "$FRONTEND_SECRETS_NEW"
     for fvar in "${FRONTEND_SECRET_VARS[@]}"; do
-        grep -E "^${fvar}=" "$APP_SECRETS" >> "$SECRETS_DIR/frontend.secrets" || true
+        grep -E "^${fvar}=" "$APP_SECRETS" >> "$FRONTEND_SECRETS_NEW" || true
     done
-    chmod 600 "$SECRETS_DIR/frontend.secrets"
-    echo "✔ secrets/frontend.secrets gerado ($(wc -l < "$SECRETS_DIR/frontend.secrets") vars)"
+    chmod 600 "$FRONTEND_SECRETS_NEW"
 
     if [ -n "$REDIS_PASSWORD" ]; then
-        cat > "$REDIS_CONF" <<EOF
+        cat > "$REDIS_CONF_NEW" <<EOF
 requirepass $REDIS_PASSWORD
 
 maxmemory 512mb
@@ -86,11 +111,24 @@ rename-command FLUSHDB ""
 rename-command DEBUG ""
 rename-command SHUTDOWN ""
 EOF
-        chmod 600 "$REDIS_CONF"
+        chmod 600 "$REDIS_CONF_NEW"
+    fi
+
+    check_compose_vars "$COMPOSE_ENV" || { echo "  Secrets antigos mantidos; .env.production não foi apagado."; exit 1; }
+
+    mv -f "$COMPOSE_ENV" "$FINAL_COMPOSE_ENV"; COMPOSE_ENV="$FINAL_COMPOSE_ENV"
+    mv -f "$APP_SECRETS" "$FINAL_APP_SECRETS"; APP_SECRETS="$FINAL_APP_SECRETS"
+    mv -f "$FRONTEND_SECRETS_NEW" "$SECRETS_DIR/frontend.secrets"
+    echo "✔ secrets/compose.env e secrets/app.secrets atualizados"
+    echo "✔ secrets/frontend.secrets gerado ($(wc -l < "$SECRETS_DIR/frontend.secrets") vars)"
+    if [ -f "$REDIS_CONF_NEW" ]; then
+        mv -f "$REDIS_CONF_NEW" "$REDIS_CONF"
         echo "✔ secrets/redis.conf atualizado"
     else
         echo "⚠ REDIS_PASSWORD não encontrado — redis.conf não atualizado"
     fi
+    trap - EXIT
+    umask "$OLD_UMASK"
 
     rm -f "$ENV_PROD"
     echo "✔ .env.production removido do servidor"
@@ -103,6 +141,7 @@ fi
 [ ! -f "$APP_SECRETS"                   ] && { echo "✖ secrets/app.secrets não encontrado. Coloque o .env.production no servidor e re-execute."; exit 1; }
 [ ! -f "$REDIS_CONF"                    ] && { echo "✖ secrets/redis.conf não encontrado. Coloque o .env.production no servidor e re-execute."; exit 1; }
 [ ! -f "$SECRETS_DIR/frontend.secrets"  ] && { echo "✖ secrets/frontend.secrets não encontrado. Re-execute com .env.production para regenerar."; exit 1; }
+check_compose_vars "$COMPOSE_ENV" || exit 1
 
 # ── Ownership (rootless podman user namespace) ────────────────────────────────
 echo "▶ Ajustando permissões do Data directory..."
